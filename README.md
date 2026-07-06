@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logomain.png" alt="Concord Logo" width="500">
+  <img src="assets/logo_gif.gif" alt="Concord Animated Logo" width="600">
 </p>
 
 <h1 align="center">Concord</h1>
