@@ -6,12 +6,12 @@
 - [ ] Objective 2 — Triage gate / confidence arbitration
 - [ ] Objective 3 — Infrastructure maturity (GitLab, K8s, Terraform)
 
-## Owner
-- [ ] Jash (infra, kubernetes, triage, arbitration)
-- [ ] rj-karan (cicd, observability)
-- [ ] Both (core, api)
+## phases
+- [ ] infra, kubernetes, triage, arbitration
+- [ ] cicd, observability
+- [ ] core, api
 
-## Friday demo — what runs end-to-end after this merges?
+## what runs end-to-end after this merges?
 
 
 ## Checklist
