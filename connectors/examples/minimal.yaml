@@ -1,4 +1,4 @@
-# Minimal: Infra + CI/CD agents only (Phase 1 demo config)
+# Infra + CI/CD agents only 
 version: "1.0"
 connectors:
   - name: terrasecure

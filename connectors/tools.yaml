@@ -1,6 +1,6 @@
 # Concord Connector Manifest
-# Edit this to declare which MCP servers Concord should use.
-# The Tool Registry reads this at startup — no code changes needed.
+# To do list: edit this to declare which MCP servers Concord should use.
+# The Tool Registry reads this at startup no code changes needed.
 
 version: "1.0"
 

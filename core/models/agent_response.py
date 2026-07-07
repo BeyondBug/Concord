@@ -13,7 +13,7 @@ class AgentResponse:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-# Severity weights — calibrated, not LLM-generated
+# Severity weights that calibrated, not LLM-generated
 SEVERITY_WEIGHT: dict[str, float] = {
     "CRITICAL": 1.0,
     "HIGH":     0.8,
@@ -21,7 +21,7 @@ SEVERITY_WEIGHT: dict[str, float] = {
     "LOW":      0.2,
 }
 
-# Source reliability per agent — empirical, updated as false positive rates are measured
+# Source reliability per agent for empirical, updated as false positive rates are measured
 # Do NOT change without a team discussion and a supporting test.
 SOURCE_RELIABILITY: dict[str, float] = {
     "infra":         0.92,  # TerraSecure: 92.45% ML accuracy

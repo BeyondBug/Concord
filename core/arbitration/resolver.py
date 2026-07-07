@@ -21,4 +21,4 @@ def arbitrate(responses: list[AgentResponse]) -> tuple[AgentResponse, bool]:
 
     if gap >= CONFIDENCE_GAP_THRESHOLD:
         return top, True   # clear winner
-    return top, False      # too close — human decides
+    return top, False      # too close human decides

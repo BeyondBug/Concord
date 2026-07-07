@@ -22,4 +22,4 @@ class Router:
             if pattern in finding.artifact:
                 if self.registry.get_connectors_for_agent(domain):
                     return [domain]
-        return ["cicd"]  # default fallback
+        return ["cicd"]  # fallback

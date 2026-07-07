@@ -6,7 +6,7 @@ from typing import Any
 
 @dataclass
 class Finding:
-    id: str                        # unique finding ID (e.g. CVE-2024-33663)
+    id: str                        # unique finding ID by CVEs
     source: str                    # which scanner produced this
     artifact: str                  # what was scanned (file path, image, manifest)
     severity: str                  # CRITICAL | HIGH | MEDIUM | LOW

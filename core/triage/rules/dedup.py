@@ -1,4 +1,4 @@
-"""Rule: duplicate findings (seen recently) skip AI."""
+"""Rule: duplicate findings (seen recently) skip AI. We use redis if findings are checked already then it uses the before reult"""
 from .base import BaseRule
 from core.models.finding import Finding
 

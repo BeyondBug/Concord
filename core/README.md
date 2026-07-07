@@ -1,6 +1,6 @@
 # core/ — Shared Platform Components
 
-Jointly owned. Both members review all PRs in this directory.
+Jointly owned. we gonna review all PRs in this directory.
 
 models/             Finding, AgentResponse dataclasses          Phase 0
 manifest/           tools.yaml loader and Pydantic schema       Phase 0
