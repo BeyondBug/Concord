@@ -5,8 +5,8 @@
 - Python 3.11+
 - Docker + Docker Compose
 - Git
-- Jash also needs: kubectl, kind/k3d, Terraform
-- rj-karan also needs: Prometheus (for observability agent)
+- kubectl, kind/k3d, Terraform
+- Prometheus (for observability agent)
 
 ## Quick Start
 

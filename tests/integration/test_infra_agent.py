@@ -1,2 +1,2 @@
 # InfraAgent + TerraSecure integration test
-# Owner: Jash | TODO Phase 2A
+# Assigned: Jash | TODO Phase 2A
