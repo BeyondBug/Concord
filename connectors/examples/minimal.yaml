@@ -1,0 +1,15 @@
+# Minimal: Infra + CI/CD agents only (Phase 1 demo config)
+version: "1.0"
+connectors:
+  - name: terrasecure
+    type: mcp
+    url: http://localhost:8001
+    token_env: TERRASECURE_TOKEN
+    agent: infra
+    capabilities: [scan_terraform]
+  - name: trivy
+    type: mcp
+    url: http://localhost:8002
+    token_env: TRIVY_TOKEN
+    agent: cicd
+    capabilities: [scan_container]

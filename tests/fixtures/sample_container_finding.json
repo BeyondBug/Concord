@@ -1,0 +1,11 @@
+{
+  "id": "CVE-2024-12345",
+  "source": "trivy",
+  "artifact": "python:3.11-slim",
+  "severity": "HIGH",
+  "title": "Vulnerable base image",
+  "description": "CVE in OpenSSL bundled with python:3.11-slim",
+  "raw": {},
+  "repository": "BeyondBug/CRMS",
+  "pr_number": 42
+}

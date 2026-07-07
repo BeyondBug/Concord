@@ -1,0 +1,9 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/beyondbug/concord
+  tag: latest
+service:
+  type: ClusterIP
+  port: 8000
+env:
+  LLM_PROVIDER: ollama

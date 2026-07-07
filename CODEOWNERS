@@ -1,0 +1,15 @@
+# Concord Code Ownership
+
+*                           @BeyondBug/core-team
+
+/agents/infra/              @JashwanthMU
+/agents/kubernetes/         @JashwanthMU
+/core/triage/               @JashwanthMU
+/core/arbitration/          @JashwanthMU
+
+/agents/cicd/               @rj-karan
+/agents/observability/      @rj-karan
+
+/core/                      @JashwanthMU @rj-karan
+/api/                       @JashwanthMU @rj-karan
+/connectors/                @JashwanthMU @rj-karan

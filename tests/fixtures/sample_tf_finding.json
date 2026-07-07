@@ -1,0 +1,11 @@
+{
+  "id": "CVE-2024-33663",
+  "source": "terrasecure",
+  "artifact": "infra/terraform/main.tf",
+  "severity": "CRITICAL",
+  "title": "IAM policy allows overly permissive actions",
+  "description": "AWS IAM policy grants * actions on * resources",
+  "raw": {},
+  "repository": "BeyondBug/CRMS",
+  "pr_number": 42
+}

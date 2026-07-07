@@ -1,0 +1,49 @@
+# Concord Connector Manifest
+# Edit this to declare which MCP servers Concord should use.
+# The Tool Registry reads this at startup — no code changes needed.
+
+version: "1.0"
+
+connectors:
+  - name: terrasecure
+    type: mcp
+    url: http://localhost:8001
+    token_env: TERRASECURE_TOKEN
+    agent: infra
+    capabilities:
+      - scan_terraform
+      - report_sarif
+
+  - name: trivy
+    type: mcp
+    url: http://localhost:8002
+    token_env: TRIVY_TOKEN
+    agent: cicd
+    capabilities:
+      - scan_container
+      - scan_filesystem
+
+  - name: checkov
+    type: mcp
+    url: http://localhost:8003
+    token_env: CHECKOV_TOKEN
+    agent: cicd
+    capabilities:
+      - scan_terraform
+      - scan_kubernetes
+
+  # Uncomment when kagent is deployed (Phase 2A — Jash)
+  # - name: kagent
+  #   type: mcp
+  #   url: http://localhost:8004
+  #   token_env: KAGENT_TOKEN
+  #   agent: kubernetes
+  #   capabilities: [scan_k8s_manifests, cluster_events, helm_audit]
+
+  # Uncomment when HolmesGPT is deployed (Phase 2B — rj-karan)
+  # - name: holmesgpt
+  #   type: mcp
+  #   url: http://localhost:8005
+  #   token_env: HOLMESGPT_TOKEN
+  #   agent: observability
+  #   capabilities: [investigate_alert, query_prometheus, query_grafana]
