@@ -10,10 +10,10 @@ CI/CD security, IaC scanning, Kubernetes policy, and observability.
 
 ## Architecture
 
-# Layer 1: MCP Runtime     core/mcp_runtime/    transport, registry, audit log
-# Layer 2: Orchestrator    core/orchestrator/   routes tasks, calls LLM
-# Layer 3: Domain Agents   agents/<domain>/     each wraps a backing tool
-# Layer 4: Existing Tools  connectors/tools.yaml  never replaced, only orchestrated
+#### Layer 1: MCP Runtime     core/mcp_runtime/    transport, registry, audit log
+#### Layer 2: Orchestrator    core/orchestrator/   routes tasks, calls LLM
+#### Layer 3: Domain Agents   agents/<domain>/     each wraps a backing tool
+#### Layer 4: Existing Tools  connectors/tools.yaml  never replaced, only orchestrated
 
 ## Ownership
 
