@@ -19,7 +19,7 @@
 ## Branch Naming
 
     feature/jash/<name>      Infra and K8s agent work
-    feature/m2/<name>        CI/CD and Observability agent work
+    feature/karan/<name>        CI/CD and Observability agent work
     feature/common/<name>    Shared core work
 
 ## PR Process
