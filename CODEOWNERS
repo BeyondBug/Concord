@@ -4,8 +4,8 @@
 
 /agents/infra/              @JashwanthMU
 /agents/kubernetes/         @JashwanthMU
-/core/triage/               @JashwanthMU
-/core/arbitration/          @JashwanthMU
+/core/triage/               @JashwanthMU @rj-karan
+/core/arbitration/          @JashwanthMU @rj-karan
 
 /agents/cicd/               @rj-karan
 /agents/observability/      @rj-karan
