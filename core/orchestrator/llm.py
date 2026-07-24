@@ -1,6 +1,5 @@
-"""Pluggable LLM backend — swap via LLM_PROVIDER env var. , At first we gonna move with ollama llm"""
+"""Pluggable LLM backend — swap via LLM_PROVIDER env var."""
 import os
-import httpx
 
 
 class LLMBackend:

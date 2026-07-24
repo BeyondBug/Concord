@@ -1,31 +1,33 @@
 #!/usr/bin/env python3
 """
-scripts/demo.py
-Concord Friday demo script — run from repo root:
-    python scripts/demo.py
+scripts/demo.py — Concord Friday demo script.
+Run from repo root: python scripts/demo.py
 """
 import asyncio
-import sys
-import os
 import logging
+import os
+import sys
 
+# sys.path must be set before local imports when running as a script
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from core.models.finding import Finding  # noqa: E402
+from core.orchestrator.orchestrator import Orchestrator  # noqa: E402
+
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-from core.models.finding import Finding
-from core.orchestrator.orchestrator import Orchestrator
-
-G  = "\033[92m"   # green
-Y  = "\033[93m"   # yellow / amber
-R  = "\033[91m"   # red
-B  = "\033[94m"   # blue
-C  = "\033[96m"   # cyan
-W  = "\033[97m"   # white
+G  = "\033[92m"
+Y  = "\033[93m"
+R  = "\033[91m"
+C  = "\033[96m"
+W  = "\033[97m"
 BD = "\033[1m"
 RS = "\033[0m"
 
+
 def hr(char="─", n=62):
     print(f"{W}{char * n}{RS}")
+
 
 def banner(text, color=C):
     hr("═")
@@ -55,8 +57,8 @@ async def scenario(label, finding, orch):
         print(f"  agent        : {result.get('agent')}")
         print(f"  confidence   : {result.get('score', 0):.4f}")
         resolved = result.get("auto_resolved")
-        resolution = f"{G}auto-resolved{RS}" if resolved else f"{Y}human tiebreak{RS}"
-        print(f"  resolution   : {resolution}")
+        res_str = f"{G}auto-resolved{RS}" if resolved else f"{Y}human tiebreak{RS}"
+        print(f"  resolution   : {res_str}")
         if result.get("pr_comment"):
             print(f"\n  {BD}PR Comment:{RS}")
             for line in result["pr_comment"].split("\\n"):
