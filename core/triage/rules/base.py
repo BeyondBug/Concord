@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+
 from core.models.finding import Finding
 
 

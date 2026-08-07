@@ -1,6 +1,10 @@
-"""Concord FastAPI application."""
+"""Concord FastAPI application — serves dashboard + API."""
+import pathlib
+
 from fastapi import FastAPI
-from api.routes import events, findings, audit
+from fastapi.responses import HTMLResponse
+
+from api.routes import audit, events, findings
 
 app = FastAPI(
     title="Concord",
@@ -11,6 +15,14 @@ app = FastAPI(
 app.include_router(events.router)
 app.include_router(findings.router)
 app.include_router(audit.router)
+
+_DASHBOARD = pathlib.Path(__file__).parent / "templates" / "dashboard.html"
+
+
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def dashboard():
+    """Concord visual dashboard."""
+    return HTMLResponse(content=_DASHBOARD.read_text(encoding="utf-8"))
 
 
 @app.get("/health")

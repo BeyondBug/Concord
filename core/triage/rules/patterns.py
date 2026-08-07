@@ -1,6 +1,7 @@
 """Rule: known finding fingerprints never need re-analysis."""
-from .base import BaseRule
 from core.models.finding import Finding
+
+from .base import BaseRule
 
 
 class KnownPatternRule(BaseRule):

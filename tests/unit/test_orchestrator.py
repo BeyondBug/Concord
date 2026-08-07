@@ -2,8 +2,10 @@
 tests/unit/test_orchestrator.py
 Orchestrator integration tests (uses agent stubs — no external deps).
 """
-import pytest
 from datetime import datetime
+
+import pytest
+
 from core.models.finding import Finding
 from core.orchestrator.orchestrator import Orchestrator
 

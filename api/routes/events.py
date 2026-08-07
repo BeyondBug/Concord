@@ -2,11 +2,13 @@
 api/routes/events.py
 Webhook receiver + /demo endpoint for Friday review.
 """
-import hmac
 import hashlib
+import hmac
 import logging
 import os
-from fastapi import APIRouter, Request, HTTPException, BackgroundTasks
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+
 from core.models.finding import Finding
 
 router = APIRouter(prefix="/events", tags=["events"])
