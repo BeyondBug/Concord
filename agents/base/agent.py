@@ -1,7 +1,8 @@
 """BaseAgent — every domain agent must implement this interface."""
 from abc import ABC, abstractmethod
-from core.models.finding import Finding
+
 from core.models.agent_response import AgentResponse
+from core.models.finding import Finding
 
 
 class BaseAgent(ABC):

@@ -1,7 +1,7 @@
 """SecurityPolicyAgent — OPA or Semgrep backed."""
 from agents.base import BaseAgent
-from core.models.finding import Finding
 from core.models.agent_response import AgentResponse
+from core.models.finding import Finding
 
 
 class SecurityPolicyAgent(BaseAgent):

@@ -1,5 +1,5 @@
 """Tool Registry — discovers connectors from the manifest at startup."""
-from core.models.manifest import ManifestConfig, ConnectorConfig
+from core.models.manifest import ConnectorConfig, ManifestConfig
 
 
 class ToolRegistry:
