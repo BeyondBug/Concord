@@ -53,14 +53,14 @@ def agents():
     t.add_column("Status",       justify="center")
     t.add_column("Phase",        style="dim")
 
-    AGENTS = [
+    agents = [
         ("0", "infra",        "TerraSecure (ML 92.45%)",  "0.92", "[green]● Active[/green]",  "0 → 2A"),
         ("1", "cicd",         "Trivy · Checkov",           "0.88", "[green]● Active[/green]",  "0 → 2B"),
         ("2", "kubernetes",   "kagent (Apache 2.0)",       "0.82", "[dim]○ Planned[/dim]",     "2A"),
         ("3", "observability","HolmesGPT (MIT)",           "0.80", "[dim]○ Planned[/dim]",     "2B"),
         ("4", "security",     "OPA / Semgrep",             "0.85", "[dim]○ Planned[/dim]",     "3"),
     ]
-    for row in AGENTS:
+    for row in agents:
         t.add_row(*row)
     con.print(t)
 

@@ -4,10 +4,10 @@ Real security scanner — reads actual files and finds security issues.
 Works on Python 3.13 with zero external dependencies.
 Covers Terraform, Kubernetes YAML, Docker Compose, Dockerfiles.
 """
-import re
 import logging
+import re
+from dataclasses import dataclass
 from pathlib import Path
-from dataclasses import dataclass, field
 from typing import ClassVar
 
 logger = logging.getLogger("concord.scanner")

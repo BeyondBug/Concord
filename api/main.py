@@ -4,8 +4,7 @@ import pathlib
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 
-from api.routes import audit, events, findings
-from api.routes import scan
+from api.routes import audit, events, findings, scan
 
 app = FastAPI(title="Concord", version="0.1.0")
 

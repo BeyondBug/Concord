@@ -2,10 +2,10 @@
 api/routes/scan.py
 Triggers a real CRMS scan and handles PR approval workflow.
 """
-import asyncio
 import logging
 import os
 from datetime import datetime
+
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 router = APIRouter(prefix="/events", tags=["scan"])
@@ -87,39 +87,39 @@ async def approve_finding(finding_id: str, agent: str):
 async def _run_scan():
     """Background task: clone/pull CRMS, scan, save to findings store."""
     import subprocess
-    import sys
     from pathlib import Path
-    from core.scanner import TerraformScanner, KubernetesScanner, scan_to_dict
+
+    from api.routes.findings import store
     from core.arbitration.resolver import arbitrate
     from core.models.agent_response import AgentResponse, compute_confidence
     from core.models.finding import Finding as ConcordFinding
+    from core.scanner import KubernetesScanner, TerraformScanner, scan_to_dict
     from core.triage.gate import TriageGate
     from core.triage.rules.severity import LowSeverityRule
-    from api.routes.findings import store
 
-    CRMS_LOCAL = Path("repos/crms")
-    CRMS_REPO  = "https://github.com/crms-devops/crms.git"
-    CRMS_GH    = "crms-devops/crms"
+    crmss_local = Path("repos/crms")
+    crms_repo  = "https://github.com/crms-devops/crms.git"
+    crms_gh    = "crms-devops/crms"
 
     try:
         # Step 1: Clone or pull CRMS
-        if CRMS_LOCAL.exists() and (CRMS_LOCAL / ".git").exists():
-            subprocess.run(["git", "-C", str(CRMS_LOCAL), "pull", "--quiet"],
+        if crmss_local.exists() and (crmss_local / ".git").exists():
+            subprocess.run(["git", "-C", str(crmss_local), "pull", "--quiet"],
                            capture_output=True)
         else:
-            CRMS_LOCAL.parent.mkdir(parents=True, exist_ok=True)
+            crmss_local.parent.mkdir(parents=True, exist_ok=True)
             subprocess.run(
-                ["git", "clone", "--depth", "1", CRMS_REPO, str(CRMS_LOCAL)],
+                ["git", "clone", "--depth", "1", crms_repo, str(crmss_local)],
                 capture_output=True)
 
         _scan_state["message"] = "Cloned CRMS — scanning..."
 
         # Step 2: Scan
-        infra_dir = CRMS_LOCAL / "infra"
-        k8s_dir   = CRMS_LOCAL / "k8s"
+        infra_dir = crmss_local / "infra"
+        k8s_dir   = crmss_local / "k8s"
 
-        tf_results  = TerraformScanner().scan(str(infra_dir) if infra_dir.exists() else str(CRMS_LOCAL))
-        k8s_results = KubernetesScanner().scan(str(k8s_dir)  if k8s_dir.exists()  else str(CRMS_LOCAL))
+        tf_results  = TerraformScanner().scan(str(infra_dir) if infra_dir.exists() else str(crmss_local))
+        k8s_results = KubernetesScanner().scan(str(k8s_dir)  if k8s_dir.exists()  else str(crmss_local))
 
         infra = scan_to_dict(tf_results,  str(infra_dir))
         cicd  = scan_to_dict(k8s_results, str(k8s_dir))
@@ -134,18 +134,18 @@ async def _run_scan():
 
         finding = ConcordFinding(
             id=fid, source="concord-scanner",
-            artifact=str(CRMS_LOCAL), severity=sev,
+            artifact=str(crmss_local), severity=sev,
             title=f"CRMS real scan: {total} violation(s)",
-            description=f"Real scan of {CRMS_GH}",
+            description=f"Real scan of {crms_gh}",
             raw={"infra": infra["total"], "cicd": cicd["total"]},
-            repository=CRMS_GH,
+            repository=crms_gh,
         )
 
         gate = TriageGate(rules=[LowSeverityRule()])
         needs_ai, reason = gate.evaluate(finding)
 
         if not needs_ai or total == 0:
-            store.add(fid, sev, str(CRMS_LOCAL), CRMS_GH, "concord-scanner",
+            store.add(fid, sev, str(crmss_local), crms_gh, "concord-scanner",
                       "fast_path",
                       {"path": "fast_path", "reason": reason,
                        "pr_comment": None,
@@ -171,23 +171,23 @@ async def _run_scan():
         gap = sr[0].confidence_score - sr[1].confidence_score
 
         if auto:
-            pr = (f"**Concord** — {CRMS_GH} scan auto-resolved\n\n"
+            pr = (f"**Concord** — {crms_gh} scan auto-resolved\n\n"
                   f"**Agent:** {winner.agent}  **Confidence:** {winner.confidence_score:.4f}\n\n"
                   f"**Real findings from CRMS:**\n{winner.root_cause}\n\n"
                   f"**Fix:**\n{winner.suggested_fix}\n\n"
                   f"*{infra['total']} Terraform + {cicd['total']} K8s violations*")
         else:
             t, s = sr[0], sr[1]
-            pr = (f"**Concord** — {CRMS_GH} scan: human tiebreak required\n\n"
+            pr = (f"**Concord** — {crms_gh} scan: human tiebreak required\n\n"
                   f"Confidence gap **{gap:.4f}** < 0.15\n\n"
                   f"**{t.agent} agent** (score {t.confidence_score:.4f})\n"
                   f"{t.root_cause}\n\n**Fix:** {t.suggested_fix}\n\n"
                   f"**{s.agent} agent** (score {s.confidence_score:.4f})\n"
                   f"{s.root_cause}\n\n**Fix:** {s.suggested_fix}\n\n"
                   f"Use the Approve buttons in the Concord dashboard to resolve.\n"
-                  f"*Real scan of {CRMS_GH}: {infra['total']} Terraform + {cicd['total']} K8s violations*")
+                  f"*Real scan of {crms_gh}: {infra['total']} Terraform + {cicd['total']} K8s violations*")
 
-        store.add(fid, sev, str(CRMS_LOCAL), CRMS_GH, "concord-scanner", "ai_path",
+        store.add(fid, sev, str(crmss_local), crms_gh, "concord-scanner", "ai_path",
                   {"path": "ai_path", "agent": winner.agent,
                    "score": winner.confidence_score,
                    "auto_resolved": auto, "pr_comment": pr,
