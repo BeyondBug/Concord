@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Concord — AI DevSecOps Platform</title>
+<style>
+:root{
+  --bg:#0D0D0F;--surface:#141417;--surface2:#1C1C22;--border:#2A2A32;
+  --brand:#1C9C76;--brand-dim:rgba(28,156,118,.12);--text:#E4E3DF;--muted:#6B6A6F;
+  --red:#EF4444;--orange:#F97316;--yellow:#EAB308;--green:#22C55E;--blue:#3B82F6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+  font-size:13px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+
+/* ── Header ── */
+.hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:0 18px;height:52px;border-bottom:1px solid var(--border);
+  background:var(--surface);flex-shrink:0;gap:12px}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;color:#fff;flex-shrink:0}
+.pulse{width:9px;height:9px;border-radius:50%;background:var(--brand);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.hdr-mid{flex:1;display:flex;align-items:center;gap:10px}
+.hdr-desc{font-size:12px;color:var(--muted)}
+.hdr-right{display:flex;gap:7px;align-items:center;flex-shrink:0}
+.pill{background:var(--surface2);border:1px solid var(--border);border-radius:4px;
+  padding:2px 9px;font-size:11px;color:var(--muted);white-space:nowrap}
+
+/* Scan button */
+.scan-btn{background:var(--brand);color:#fff;border:none;border-radius:6px;
+  padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;
+  display:flex;align-items:center;gap:6px;transition:opacity .15s;white-space:nowrap}
+.scan-btn:hover{opacity:.85}
+.scan-btn:disabled{opacity:.45;cursor:not-allowed}
+.scan-btn.scanning{background:#D98E04}
+#scan-status-text{font-size:11px;color:var(--muted)}
+
+/* ── Layout ── */
+.layout{display:flex;flex:1;overflow:hidden}
+
+/* ── Sidebar ── */
+.sidebar{width:210px;border-right:1px solid var(--border);padding:14px 12px;
+  overflow-y:auto;flex-shrink:0;background:var(--surface)}
+.sec{margin-bottom:18px}
+.sec-lbl{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:8px}
+.agent{display:flex;flex-direction:column;padding:7px 9px;border-radius:6px;
+  margin-bottom:3px;border:1px solid transparent}
+.agent.on{background:var(--brand-dim);border-color:rgba(28,156,118,.2)}
+.agent.off{opacity:.38}
+.agent-name{display:flex;align-items:center;gap:7px;font-weight:600;font-size:12px}
+.agent-sub{font-size:10px;color:var(--muted);margin-top:2px;margin-left:16px}
+.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.dot-g{background:var(--green)}.dot-d{background:#3A3A42}
+.stat{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
+.sv{font-weight:700;color:var(--brand)}
+
+/* Last scan info box */
+.scan-info{background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+  padding:10px;font-size:11px;color:var(--muted);line-height:1.7}
+.scan-info strong{color:var(--text)}
+
+/* ── Main ── */
+.main{flex:1;display:flex;overflow:hidden}
+
+/* ── Findings list ── */
+.f-panel{width:340px;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;flex-shrink:0}
+.p-hdr{display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface)}
+.p-title{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.p-live{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--brand);animation:pulse 2s infinite}
+.f-list{flex:1;overflow-y:auto;padding:6px}
+
+.fi{padding:10px 12px;border-radius:6px;margin-bottom:3px;cursor:pointer;
+  border:1px solid transparent;transition:all .12s}
+.fi:hover{background:var(--surface2);border-color:var(--border)}
+.fi.sel{background:var(--brand-dim);border-color:var(--brand)}
+.fi.real{border-left:3px solid var(--brand)}
+.fi-top{display:flex;align-items:center;gap:7px;margin-bottom:3px}
+.fi-id{font-family:monospace;font-size:11px;font-weight:600;color:#fff;
+  flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fi-time{font-size:10px;color:var(--muted);white-space:nowrap}
+.fi-meta{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--muted)}
+.fi-repo{font-size:10px;color:var(--brand);margin-left:auto}
+
+.sev{font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;white-space:nowrap}
+.sev-CRITICAL{background:rgba(239,68,68,.15);color:#EF4444}
+.sev-HIGH{background:rgba(249,115,22,.15);color:#F97316}
+.sev-MEDIUM{background:rgba(234,179,8,.15);color:#EAB308}
+.sev-LOW{background:rgba(34,197,94,.15);color:#22C55E}
+
+.pbadge{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700}
+.pbadge-fast{background:rgba(107,107,111,.18);color:var(--muted)}
+.pbadge-ai{background:rgba(28,156,118,.15);color:var(--brand)}
+.real-badge{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;
+  background:rgba(59,130,246,.15);color:#60A5FA}
+
+.empty{text-align:center;color:var(--muted);padding:40px 16px;font-size:12px;line-height:1.9}
+
+/* ── Detail panel ── */
+.d-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.d-body{flex:1;overflow-y:auto;padding:18px 20px}
+
+.sec-h{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
+  color:var(--muted);margin-bottom:8px;margin-top:18px}
+.sec-h:first-child{margin-top:0}
+.kv{display:grid;grid-template-columns:115px 1fr;gap:5px 10px;margin-bottom:4px}
+.kk{color:var(--muted);font-size:11px;padding-top:1px}
+.kv-v{font-size:12px;font-family:monospace;word-break:break-all}
+.comment-box{background:var(--surface2);border:1px solid var(--border);
+  border-radius:6px;padding:14px;font-size:12px;line-height:1.75;
+  white-space:pre-wrap;word-break:break-word;font-family:monospace}
+
+/* ── Approval section ── */
+.approval{background:rgba(234,179,8,.06);border:1px solid rgba(234,179,8,.25);
+  border-radius:8px;padding:16px;margin-top:16px}
+.approval-title{font-size:13px;font-weight:700;color:#EAB308;margin-bottom:6px;
+  display:flex;align-items:center;gap:7px}
+.approval-desc{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6}
+.approval-agents{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.approve-card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;
+  padding:12px;display:flex;flex-direction:column;gap:6px}
+.approve-card-title{font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--text)}
+.approve-card-score{font-size:10px;color:var(--muted);font-family:monospace}
+.approve-card-detail{font-size:10px;color:var(--muted);line-height:1.5;
+  max-height:60px;overflow:hidden;text-overflow:ellipsis}
+.approve-btn{background:var(--brand);color:#fff;border:none;border-radius:5px;
+  padding:8px 12px;font-size:11px;font-weight:700;cursor:pointer;
+  margin-top:4px;transition:opacity .15s;width:100%}
+.approve-btn:hover{opacity:.82}
+.approve-btn:disabled{opacity:.4;cursor:not-allowed}
+.approval-done{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);
+  border-radius:6px;padding:12px;text-align:center;color:var(--green);
+  font-size:12px;font-weight:600}
+.approval-done a{color:var(--brand);text-decoration:none}
+.approval-done a:hover{text-decoration:underline}
+
+.github-notice{background:var(--surface2);border:1px solid var(--border);
+  border-radius:6px;padding:10px;font-size:11px;color:var(--muted);
+  margin-top:10px;line-height:1.6}
+.github-notice code{background:#222;padding:1px 5px;border-radius:3px;
+  font-family:monospace;font-size:10px;color:var(--text)}
+
+/* tag */
+.tag-auto{color:var(--green);font-weight:700}
+.tag-human{color:#EAB308;font-weight:700}
+.tag-fast{color:var(--muted)}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+
+.toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;border-radius:6px;
+  font-size:12px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100}
+.toast.ok{background:var(--brand);color:#fff}
+.toast.err{background:#EF4444;color:#fff}
+.toast.show{opacity:1}
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header class="hdr">
+  <div class="logo"><div class="pulse"></div>Concord</div>
+  <div class="hdr-mid">
+    <span class="hdr-desc">AI DevSecOps Orchestration Platform</span>
+    <span id="scan-status-text" style="font-size:11px;color:var(--muted)"></span>
+  </div>
+  <div class="hdr-right">
+    <button class="scan-btn" id="scan-btn" onclick="startScan()">
+      ⟳ Scan crms-devops/crms
+    </button>
+    <span class="pill" id="llm-pill">LLM: —</span>
+    <span class="pill">v0.1.0</span>
+    <span class="pill" id="status-pill">● Connecting…</span>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sec">
+      <div class="sec-lbl">Agents</div>
+      <div class="agent on">
+        <div class="agent-name"><div class="dot dot-g"></div>Infra Agent</div>
+        <div class="agent-sub">Pattern scanner · 92% acc</div>
+      </div>
+      <div class="agent on">
+        <div class="agent-name"><div class="dot dot-g"></div>CI/CD Agent</div>
+        <div class="agent-sub">K8s · Dockerfile scanner</div>
+      </div>
+      <div class="agent off">
+        <div class="agent-name"><div class="dot dot-d"></div>K8s Agent</div>
+        <div class="agent-sub">kagent · Phase 2A</div>
+      </div>
+      <div class="agent off">
+        <div class="agent-name"><div class="dot dot-d"></div>Observability</div>
+        <div class="agent-sub">HolmesGPT · Phase 2B</div>
+      </div>
+      <div class="agent off">
+        <div class="agent-name"><div class="dot dot-d"></div>Security Policy</div>
+        <div class="agent-sub">OPA / Semgrep · Phase 3</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-lbl">Stats</div>
+      <div class="stat"><span style="color:var(--muted)">Total</span><span class="sv" id="s-total">0</span></div>
+      <div class="stat"><span style="color:var(--muted)">Fast path</span><span class="sv" id="s-fast">0</span></div>
+      <div class="stat"><span style="color:var(--muted)">AI path</span><span class="sv" id="s-ai">0</span></div>
+      <div class="stat"><span style="color:var(--muted)">Tiebreaks</span><span class="sv" id="s-tie">0</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-lbl">Last Scan</div>
+      <div class="scan-info" id="scan-info">
+        No scan yet.<br>Click <strong>Scan crms-devops/crms</strong> above.
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div class="main">
+
+    <!-- Findings list -->
+    <div class="f-panel">
+      <div class="p-hdr">
+        <span class="p-title">Findings</span>
+        <span class="p-live"><span class="live-dot"></span> live</span>
+      </div>
+      <div class="f-list" id="f-list">
+        <div class="empty">
+          No findings yet.<br><br>
+          Click <strong>Scan crms-devops/crms</strong> in the header<br>
+          to run a real scan and see results here.
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail panel -->
+    <div class="d-panel">
+      <div class="p-hdr">
+        <span class="p-title">Finding Detail</span>
+        <span id="detail-repo" style="font-size:11px;color:var(--brand)"></span>
+      </div>
+      <div class="d-body" id="d-body">
+        <div style="display:flex;flex-direction:column;align-items:center;
+                    justify-content:center;height:100%;color:var(--muted);gap:10px">
+          <div style="font-size:32px;opacity:.2">◎</div>
+          <div>Select a finding to see details</div>
+          <div style="font-size:11px">or click Scan crms-devops/crms to start</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let sel = null, findings = [], scanPolling = null;
+
+const toast = (msg, type='ok', ms=3000) => {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = `toast ${type} show`;
+  setTimeout(() => el.classList.remove('show'), ms);
+};
+
+const sevCls = s => 'sev-' + (s||'LOW').toUpperCase();
+
+function ago(ts) {
+  if (!ts) return '';
+  const d = (Date.now() - new Date(ts+'Z').getTime()) / 1000;
+  if (d < 60) return Math.round(d)+'s';
+  if (d < 3600) return Math.round(d/60)+'m';
+  return Math.round(d/3600)+'h';
+}
+
+// ── Scan CRMS ──────────────────────────────────────────────────
+
+async function startScan() {
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  btn.textContent = '⟳ Scanning…';
+  btn.classList.add('scanning');
+  document.getElementById('scan-status-text').textContent = 'Cloning and scanning crms-devops/crms…';
+  document.getElementById('scan-info').innerHTML = '<strong>Scanning…</strong><br>Cloning crms-devops/crms and running real security checks.';
+  toast('Scan started — this takes 10-30 seconds', 'ok', 5000);
+
+  try {
+    await fetch('/events/scan-crms', { method: 'POST' });
+  } catch(e) {
+    toast('Could not start scan: ' + e.message, 'err');
+    resetScanBtn();
+    return;
+  }
+
+  // Poll for completion
+  scanPolling = setInterval(async () => {
+    try {
+      const r = await fetch('/events/scan-status');
+      const s = await r.json();
+
+      if (s.status === 'done') {
+        clearInterval(scanPolling);
+        const total = s.total || 0;
+        const sev   = s.severity || 'LOW';
+        document.getElementById('scan-status-text').textContent =
+          `Last scan: ${total} violation(s) found (${sev})`;
+        document.getElementById('scan-info').innerHTML =
+          `<strong>${total} violation(s)</strong> — ${sev}<br>` +
+          `Auto-resolved: ${s.auto_resolved ? 'Yes' : s.needs_approval ? '<span style="color:#EAB308">Needs approval</span>' : '—'}<br>` +
+          `Finding: <code>${s.finding_id || '—'}</code>`;
+        resetScanBtn();
+        await refresh();
+        // Auto-select the CRMS finding
+        const crms = findings.find(f => f.repo === 'crms-devops/crms');
+        if (crms) pick(crms.id);
+        toast(`Scan complete: ${total} real violation(s) found`, 'ok', 4000);
+
+      } else if (s.status === 'error') {
+        clearInterval(scanPolling);
+        toast('Scan error: ' + (s.error || 'unknown'), 'err', 5000);
+        resetScanBtn();
+
+      } else {
+        document.getElementById('scan-status-text').textContent =
+          s.message || 'Scanning…';
+      }
+    } catch(e) {
+      clearInterval(scanPolling);
+      resetScanBtn();
+    }
+  }, 2000);
+}
+
+function resetScanBtn() {
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = false;
+  btn.textContent = '⟳ Scan crms-devops/crms';
+  btn.classList.remove('scanning');
+}
+
+// ── Render findings ────────────────────────────────────────────
+
+function renderList(list) {
+  const el = document.getElementById('f-list');
+  if (!list.length) {
+    el.innerHTML = '<div class="empty">No findings yet.<br><br>Click <strong>Scan crms-devops/crms</strong> in the header.</div>';
+    return;
+  }
+
+  // Sort: real CRMS findings first
+  const sorted = [...list].sort((a,b) => {
+    const aReal = a.repo === 'crms-devops/crms' ? 0 : 1;
+    const bReal = b.repo === 'crms-devops/crms' ? 0 : 1;
+    return aReal - bReal;
+  });
+
+  el.innerHTML = sorted.map(f => {
+    const isReal = f.repo === 'crms-devops/crms';
+    const path   = f.path || '';
+    return `
+      <div class="fi ${f.id===sel?'sel':''} ${isReal?'real':''}" onclick="pick('${f.id}')">
+        <div class="fi-top">
+          <span class="sev ${sevCls(f.severity)}">${f.severity||'?'}</span>
+          <span class="fi-id">${f.id}</span>
+          <span class="fi-time">${ago(f.timestamp)}</span>
+        </div>
+        <div class="fi-meta">
+          <span class="pbadge ${path==='ai_path'?'pbadge-ai':'pbadge-fast'}">${path==='ai_path'?'AI':'fast'}</span>
+          ${isReal ? '<span class="real-badge">CRMS</span>' : ''}
+          <span>${(f.artifact||'').split(/[\\/]/).pop()}</span>
+          <span class="fi-repo">${f.repo||''}</span>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Finding detail ─────────────────────────────────────────────
+
+function pick(id) {
+  sel = id;
+  const f = findings.find(x => x.id === id);
+  if (!f) return;
+  renderList(findings);
+
+  document.getElementById('detail-repo').textContent = f.repo || '';
+
+  const r   = f.result || {};
+  const isAI = r.path === 'ai_path';
+  const resClass = r.auto_resolved===true ? 'tag-auto' : r.auto_resolved===false ? 'tag-human' : 'tag-fast';
+  const resLabel = r.auto_resolved===true ? '✓ Auto-resolved' : r.auto_resolved===false ? '⚡ Human tiebreak' : '⚡ Fast path';
+  const comment  = (r.pr_comment||'').replace(/\\n/g,'\n');
+  const needsApproval = r.needs_approval && !r.approved_by;
+  const agents   = r.agents || {};
+  const agentNames = Object.keys(agents);
+
+  document.getElementById('d-body').innerHTML = `
+    <div class="sec-h">Finding</div>
+    <div class="kv">
+      <span class="kk">ID</span><span class="kv-v">${f.id}</span>
+      <span class="kk">Severity</span><span><span class="sev ${sevCls(f.severity)}">${f.severity||'?'}</span></span>
+      <span class="kk">Repository</span><span class="kv-v" style="color:var(--brand)">${f.repo||'—'}</span>
+      <span class="kk">Source</span><span class="kv-v">${f.source||'—'}</span>
+      <span class="kk">Artifact</span><span class="kv-v">${f.artifact||'—'}</span>
+      <span class="kk">Violations</span><span class="kv-v">
+        Terraform: ${r.infra_violations||'—'}  ·  K8s: ${r.cicd_violations||'—'}
+      </span>
+    </div>
+
+    ${isAI ? `
+    <div class="sec-h">Concord Analysis</div>
+    <div class="kv">
+      <span class="kk">Path</span><span class="kv-v">${r.path||'—'}</span>
+      <span class="kk">Agent</span><span class="kv-v">${r.agent||'—'}</span>
+      <span class="kk">Confidence</span><span class="kv-v">${r.score!=null?r.score.toFixed(4):'—'}</span>
+      <span class="kk">Resolution</span><span class="kv-v <span class="${resClass}">${resLabel}</span></span>
+    </div>` : `
+    <div class="sec-h">Concord Analysis</div>
+    <div class="kv">
+      <span class="kk">Path</span><span class="kv-v tag-fast">Fast path (0 violations or LOW severity)</span>
+    </div>`}
+
+    ${comment ? `
+    <div class="sec-h">PR Comment</div>
+    <div class="comment-box">${comment.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>` : ''}
+
+    ${needsApproval ? `
+    <div class="approval">
+      <div class="approval-title">⚡ Human Tiebreak Required</div>
+      <div class="approval-desc">
+        Two agents analyzed the CRMS repository and produced conflicting findings.<br>
+        Confidence gap is below 0.15 threshold. Choose which agent's assessment to trust.<br>
+        This will create a real GitHub issue on <strong>crms-devops/crms</strong>.
+      </div>
+      <div class="approval-agents">
+        ${agentNames.map(a => `
+          <div class="approve-card">
+            <div class="approve-card-title">${a} agent</div>
+            <div class="approve-card-score">Confidence: ${(agents[a]||0).toFixed(4)}</div>
+            <div class="approve-card-detail">${(r[a+'_root_cause']||'').split('\\n')[0]||''}</div>
+            <button class="approve-btn" onclick="approveFinding('${f.id}','${a}')">
+              ✓ Approve ${a} agent
+            </button>
+          </div>`).join('')}
+      </div>
+      <div class="github-notice">
+        💡 Approval creates a GitHub issue on crms-devops/crms.<br>
+        Requires: <code>GITHUB_TOKEN=ghp_...</code> in your <code>.env</code> file.<br>
+        Get token: <a href="https://github.com/settings/tokens" target="_blank" style="color:var(--brand)">github.com/settings/tokens</a> → repo scope
+      </div>
+    </div>` : ''}
+
+    ${r.approved_by ? `
+    <div class="approval-done">
+      ✓ Approved — ${r.approved_by} agent<br>
+      ${r.github_url ? `<a href="${r.github_url}" target="_blank">View GitHub issue →</a>` : '(set GITHUB_TOKEN to create issue)'}
+    </div>` : ''}
+  `;
+}
+
+// ── Approve finding ────────────────────────────────────────────
+
+async function approveFinding(findingId, agent) {
+  const btns = document.querySelectorAll('.approve-btn');
+  btns.forEach(b => b.disabled = true);
+  toast(`Approving ${agent} agent and creating GitHub issue…`, 'ok', 5000);
+
+  try {
+    const r   = await fetch(`/events/findings/${findingId}/approve/${agent}`, {method:'POST'});
+    const data = await r.json();
+    const url  = data.github_url;
+
+    if (url) {
+      toast(`✓ GitHub issue created!`, 'ok', 5000);
+    } else {
+      toast(data.message || 'Approved (no GitHub token)', 'ok', 4000);
+    }
+
+    // Update local state
+    const f = findings.find(x => x.id === findingId);
+    if (f && f.result) {
+      f.result.approved_by   = agent;
+      f.result.needs_approval = false;
+      f.result.github_url     = url;
+      f.result.auto_resolved  = true;
+    }
+    pick(findingId);
+  } catch(e) {
+    toast('Approval failed: ' + e.message, 'err', 5000);
+    btns.forEach(b => b.disabled = false);
+  }
+}
+
+// ── Poll findings ──────────────────────────────────────────────
+
+async function refresh() {
+  try {
+    const r = await fetch('/findings/');
+    const d = await r.json();
+    findings = d.findings || [];
+
+    document.getElementById('s-total').textContent = d.stats?.total||0;
+    document.getElementById('s-fast').textContent  = d.stats?.fast ||0;
+    document.getElementById('s-ai').textContent    = d.stats?.ai   ||0;
+    document.getElementById('s-tie').textContent   = d.stats?.tiebreaks||0;
+    document.getElementById('llm-pill').textContent = 'LLM: '+(d.llm_provider||'ollama');
+    document.getElementById('status-pill').innerHTML =
+      '<span style="color:var(--green)">●</span> Running';
+
+    renderList(findings);
+    if (sel) pick(sel);
+  } catch(e) {
+    document.getElementById('status-pill').textContent = '● Offline';
+  }
+}
+
+setInterval(refresh, 2000);
+refresh();
+</script>
+</body>
+</html>

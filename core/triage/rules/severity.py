@@ -1,6 +1,7 @@
 """Rule: low-severity findings skip AI."""
-from .base import BaseRule
 from core.models.finding import Finding
+
+from .base import BaseRule
 
 FAST_PATH_SEVERITIES = {"LOW", "INFORMATIONAL"}
 

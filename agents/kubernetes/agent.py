@@ -1,7 +1,7 @@
 """KubernetesAgent — composed on kagent (Apache 2.0)."""
 from agents.base import BaseAgent
-from core.models.finding import Finding
 from core.models.agent_response import AgentResponse
+from core.models.finding import Finding
 
 
 class KubernetesAgent(BaseAgent):

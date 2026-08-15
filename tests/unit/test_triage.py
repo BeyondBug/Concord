@@ -1,9 +1,10 @@
 """Tests for the triage gate rule engine."""
 from datetime import datetime
-from core.triage.gate import TriageGate
-from core.triage.rules.severity import LowSeverityRule
-from core.triage.rules.patterns import KnownPatternRule
+
 from core.models.finding import Finding
+from core.triage.gate import TriageGate
+from core.triage.rules.patterns import KnownPatternRule
+from core.triage.rules.severity import LowSeverityRule
 
 
 def make_finding(severity: str = "HIGH", finding_id: str = "f1") -> Finding:

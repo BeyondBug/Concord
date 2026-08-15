@@ -1,7 +1,7 @@
 """ObservabilityAgent — composed on HolmesGPT (MIT)."""
 from agents.base import BaseAgent
-from core.models.finding import Finding
 from core.models.agent_response import AgentResponse
+from core.models.finding import Finding
 
 
 class ObservabilityAgent(BaseAgent):

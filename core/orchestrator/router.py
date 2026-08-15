@@ -1,6 +1,6 @@
 """Router — decides which agent(s) handle a finding."""
-from core.models.finding import Finding
 from core.mcp_runtime.registry import ToolRegistry
+from core.models.finding import Finding
 
 
 class Router:

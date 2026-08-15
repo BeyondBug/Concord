@@ -1,5 +1,6 @@
 """Secure Transport — authenticated connections to MCP servers."""
 import httpx
+
 from core.credential_broker import CredentialBroker
 
 
