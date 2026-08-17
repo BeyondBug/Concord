@@ -196,7 +196,7 @@ class CICDAgent(BaseAgent):
         )
         root_cause = (
             f"[{top['id']}] {top['title']} in {top['target']}\n"
-            f"{len(vulns)} vulnerability/ies found:\n{lines}"
+            f"{len(vulns)} vulnerabilities found:\n{lines}"
         )
         fix = (
             f"Fix {top['id']}: upgrade {top['pkg']} → {top['fixed_in']}"
