@@ -40,3 +40,10 @@ htmlcov/
 # Logs
 *.log
 logs/
+
+# Concord persistence (SQLite default backend)
+concord.db
+concord.db-wal
+concord.db-shm
+*.sqlite
+*.sqlite3

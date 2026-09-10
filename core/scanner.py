@@ -237,6 +237,136 @@ class KubernetesScanner:
         return results
 
 
+class SourceCodeScanner:
+    """Semgrep-style pattern scanner for application source code.
+
+    Dependency-free. Backs the SecurityPolicyAgent (Phase 3).
+    Scans Python / JS / TS / Go / PHP for high-signal injection and
+    secret-handling anti-patterns. Patterns are conservative to keep the
+    false-positive rate low, because source_reliability feeds directly into
+    the arbitration confidence score.
+    """
+
+    #: Extensions we know how to reason about, mapped to a language label.
+    LANG_BY_EXT: ClassVar[dict[str, str]] = {
+        ".py": "python",
+        ".js": "javascript",
+        ".jsx": "javascript",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".go": "go",
+        ".php": "php",
+    }
+
+    #: Each check: id, severity, applicable languages, compiled-later regex,
+    #: title, fix. ``langs=None`` means "all languages".
+    CHECKS: ClassVar[list[dict]] = [
+        dict(id="CONCORD_PY_EXEC", sev="CRITICAL", langs={"python"},
+             pattern=r"\b(?:eval|exec)\s*\(",
+             title="Use of eval()/exec() on runtime data",
+             fix="Avoid eval/exec; use ast.literal_eval or explicit dispatch."),
+        dict(id="CONCORD_PY_PICKLE", sev="HIGH", langs={"python"},
+             pattern=r"\bpickle\.loads?\s*\(",
+             title="Unsafe deserialization via pickle",
+             fix="Use json or a schema-validated format instead of pickle."),
+        dict(id="CONCORD_PY_YAML", sev="HIGH", langs={"python"},
+             pattern=r"\byaml\.load\s*\((?![^)]*Loader\s*=\s*yaml\.SafeLoader)",
+             title="yaml.load() without SafeLoader",
+             fix="Use yaml.safe_load() or pass Loader=yaml.SafeLoader."),
+        dict(id="CONCORD_SHELL_TRUE", sev="HIGH", langs={"python"},
+             pattern=r"subprocess\.(?:run|call|Popen|check_output)\s*\([^)]*shell\s*=\s*True",
+             title="subprocess call with shell=True",
+             fix="Pass an argument list and shell=False; never interpolate input."),
+        dict(id="CONCORD_OS_SYSTEM", sev="HIGH", langs={"python"},
+             pattern=r"\bos\.system\s*\(",
+             title="Command execution via os.system()",
+             fix="Use subprocess with an argument list and shell=False."),
+        dict(id="CONCORD_JS_EVAL", sev="CRITICAL", langs={"javascript", "typescript"},
+             pattern=r"\beval\s*\(",
+             title="Use of eval() in JS/TS",
+             fix="Remove eval(); use JSON.parse or explicit logic."),
+        dict(id="CONCORD_JS_EXEC", sev="HIGH", langs={"javascript", "typescript"},
+             pattern=r"child_process\.(?:exec|execSync)\s*\(",
+             title="child_process.exec with a shell",
+             fix="Use execFile/spawn with an argument array, not exec."),
+        dict(id="CONCORD_GO_EXEC", sev="MEDIUM", langs={"go"},
+             pattern=r"exec\.Command\s*\(\s*[\"']?(?:sh|bash|cmd)[\"']?\s*,",
+             title="Go exec.Command invoking a shell",
+             fix="Invoke the target binary directly, not via sh -c."),
+        dict(id="CONCORD_PHP_EXEC", sev="CRITICAL", langs={"php"},
+             pattern=r"\b(?:system|exec|passthru|shell_exec|popen)\s*\(",
+             title="PHP command-execution sink",
+             fix="Avoid shell sinks; use escapeshellarg or a safe API."),
+        dict(id="CONCORD_SECRET", sev="CRITICAL", langs=None,
+             pattern=(r"(?i)(?:password|passwd|secret|api[_-]?key|token|"
+                      r"aws_secret_access_key)\s*[:=]\s*[\"'][^\"'\s]{8,}[\"']"),
+             title="Possible hardcoded secret in source",
+             fix="Move the value to an environment variable or secret manager."),
+    ]
+
+    # Reduce obvious false positives: skip vendored / generated trees.
+    _SKIP_DIRS: ClassVar[tuple[str, ...]] = (
+        "node_modules", "__pycache__", ".git", "vendor", "dist", "build",
+        ".venv", "venv", "site-packages",
+    )
+
+    def __init__(self) -> None:
+        # Compile once; case-insensitivity is baked into individual patterns.
+        self._compiled = [
+            {**c, "rx": re.compile(c["pattern"])} for c in self.CHECKS
+        ]
+
+    def scan(self, directory: str) -> list[Finding]:
+        results: list[Finding] = []
+        root = Path(directory)
+        if not root.exists():
+            logger.info("SourceCodeScanner: path does not exist: %s", directory)
+            return results
+
+        files = [
+            p for p in root.rglob("*")
+            if p.is_file()
+            and p.suffix in self.LANG_BY_EXT
+            and not any(skip in p.parts for skip in self._SKIP_DIRS)
+        ]
+        if not files:
+            logger.info("SourceCodeScanner: no source files under %s", directory)
+            return results
+
+        logger.info("SourceCodeScanner: scanning %d source files in %s",
+                    len(files), directory)
+
+        for path in files:
+            lang = self.LANG_BY_EXT[path.suffix]
+            try:
+                lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            except OSError as exc:
+                logger.warning("Cannot read %s: %s", path, exc)
+                continue
+
+            for check in self._compiled:
+                langs = check["langs"]
+                if langs is not None and lang not in langs:
+                    continue
+                for i, line in enumerate(lines, 1):
+                    if check["rx"].search(line):
+                        results.append(Finding(
+                            check_id=check["id"],
+                            severity=check["sev"],
+                            title=check["title"],
+                            description=f"{check['title']} in {path.name}:{i}",
+                            file_path=str(path),
+                            line=i,
+                            resource=lang,
+                            fix=check["fix"],
+                        ))
+                        break  # one finding per check per file
+
+        logger.info("SourceCodeScanner: %d findings in %d files",
+                    len(results), len(files))
+        return results
+
+
 def scan_to_dict(findings: list[Finding], target: str) -> dict:
     """Convert Finding list to our standard agent dict."""
     if not findings:
