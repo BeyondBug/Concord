@@ -50,7 +50,7 @@ LLM self-report — this invariant is preserved and tested.
 | Persistence (audit) | Log-only; not queryable | High | **Replaced** | durable SQLite store | `core/persistence/**`, `api/routes/audit.py`, orchestrator | **DONE** | yes | `test_persistence.py` |
 | API routes | Thin; `/audit` returned empty | Med | Improved | wire to store | `api/routes/**` | PARTIAL | smoke | TestClient smoke passes |
 | API auth | `middleware/auth.py` exists but not wired into `main.py` | High | **Implemented** | API-key dependency + fail-safe dev mode | `api/main.py`, `api/middleware/auth.py`, `api/middleware/logging.py` | **DONE** | yes | `test_auth.py` (11) + live smoke |
-| MCP transport | No TLS verify config, no mTLS | Med | PARTIAL | add verify + mTLS (TODO in code) | `core/mcp_runtime/transport.py` | PARTIAL | no | — |
+| MCP transport | No TLS verify config, no mTLS | Med | **Hardened** | https-by-default, CA bundle, mTLS, insecure opt-in | `core/mcp_runtime/transport.py`, `core/models/manifest.py` | **DONE** | yes | `test_transport_security.py` (14) |
 | Credential broker | Scoped per-connector env tokens, no master | — | Real | rotation readiness | `core/credential_broker/broker.py` | PARTIAL | no | — |
 | `context.sanitize_tool_output` | Only truncates length; labeled as injection defense | Med | STUB | real sanitization | `core/orchestrator/context.py` | STUB | no | — |
 | CLI | Single Typer file | Med | PARTIAL | expand + JSON mode | `concord_cli/main.py` | PARTIAL | no | — |
@@ -62,6 +62,33 @@ LLM self-report — this invariant is preserved and tested.
 ---
 
 ## 3. What this session actually changed (verified)
+
+### Slice 3 — MCP transport TLS hardening (this session)
+
+**Implemented**
+- **`core/mcp_runtime/transport.py`** — `SecureTransport` is now secure by
+  default: TLS verification on, optional per-connector CA bundle, optional
+  mTLS (client cert/key), and plaintext `http://` URLs **rejected** unless
+  `CONCORD_ALLOW_INSECURE_TRANSPORT=1` is set (logged loudly). Unknown/relative
+  URL schemes are refused rather than guessed. Scoped bearer token still comes
+  from the per-connector broker and is never logged. Original `get_client`
+  signature preserved; added `get_client_for(connector)`.
+- **`core/models/manifest.py`** — added an **optional** `ConnectorTLS` block
+  (`ca_bundle`, `client_cert`, `client_key`, `verify`). Backward compatible:
+  the existing `tools.yaml` still validates unchanged.
+- **`connectors/tools.yaml`** — documented TLS/mTLS example (commented).
+- **`.env.example`** — documents `CONCORD_ALLOW_INSECURE_TRANSPORT`.
+
+**Tests added (14 new; 62 total passing)**
+- `tests/integration/test_transport_security.py` — scheme enforcement
+  (http rejected/opt-in/https/unknown/relative), token scoping, CA-bundle and
+  mTLS wiring, and `get_client_for` applying the same guard.
+
+**Note:** no agent calls `SecureTransport` yet (agents use local scanners), so
+this hardening had no callers to break — it makes the interface safe for when
+the kubernetes/observability MCP connectors are wired in.
+
+---
 
 ### Slice 2 — API authentication + request correlation (this session)
 
@@ -134,7 +161,7 @@ LLM self-report — this invariant is preserved and tested.
 | Check | Command | Result |
 |-------|---------|--------|
 | Lint | `ruff check .` | PASS (clean) |
-| Unit + integration tests | `pytest tests/` | 48 passed |
+| Unit + integration tests | `pytest tests/` | 62 passed |
 | API smoke | FastAPI `TestClient` demo → findings → audit | PASS (data persisted + readable) |
 | Orchestrator run | security agent scores 0.85 and enters arbitration | PASS (verified in logs) |
 | No stray artifacts | `ls *.db` | none committed |
@@ -145,7 +172,7 @@ LLM self-report — this invariant is preserved and tested.
 
 **P0 (security / correctness)**
 - ~~Wire `api/middleware/auth.py` into `api/main.py`~~ — **DONE** (slice 2).
-- Add TLS verification (and optional mTLS) to `SecureTransport`.
+- ~~Add TLS verification (and optional mTLS) to `SecureTransport`~~ — **DONE** (slice 3).
 - Replace `context.sanitize_tool_output` truncation stub with real prompt-injection defenses, or rename it to reflect what it does.
 
 **P1 (core functionality)**
