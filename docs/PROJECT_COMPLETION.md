@@ -49,7 +49,7 @@ LLM self-report — this invariant is preserved and tested.
 | Persistence (findings) | In-memory dict only; lost on restart | High | **Replaced** | durable SQLite store | `core/persistence/**`, `api/routes/findings.py` | **DONE** | yes | `test_persistence.py` |
 | Persistence (audit) | Log-only; not queryable | High | **Replaced** | durable SQLite store | `core/persistence/**`, `api/routes/audit.py`, orchestrator | **DONE** | yes | `test_persistence.py` |
 | API routes | Thin; `/audit` returned empty | Med | Improved | wire to store | `api/routes/**` | PARTIAL | smoke | TestClient smoke passes |
-| API auth | `middleware/auth.py` exists but not wired into `main.py` | High | STUB | wire + document | `api/main.py`, `api/middleware/auth.py` | STUB | no | — |
+| API auth | `middleware/auth.py` exists but not wired into `main.py` | High | **Implemented** | API-key dependency + fail-safe dev mode | `api/main.py`, `api/middleware/auth.py`, `api/middleware/logging.py` | **DONE** | yes | `test_auth.py` (11) + live smoke |
 | MCP transport | No TLS verify config, no mTLS | Med | PARTIAL | add verify + mTLS (TODO in code) | `core/mcp_runtime/transport.py` | PARTIAL | no | — |
 | Credential broker | Scoped per-connector env tokens, no master | — | Real | rotation readiness | `core/credential_broker/broker.py` | PARTIAL | no | — |
 | `context.sanitize_tool_output` | Only truncates length; labeled as injection defense | Med | STUB | real sanitization | `core/orchestrator/context.py` | STUB | no | — |
@@ -62,6 +62,34 @@ LLM self-report — this invariant is preserved and tested.
 ---
 
 ## 3. What this session actually changed (verified)
+
+### Slice 2 — API authentication + request correlation (this session)
+
+**Implemented**
+- **`api/middleware/auth.py`** — API-key authentication as a FastAPI
+  dependency. Key from `CONCORD_API_KEY`, presented via `Authorization: Bearer`
+  or `X-API-Key`. Constant-time comparison; key never logged. **Fail-safe dev
+  mode**: unset key → open mode with a loud warning (never a silent default).
+- **`api/middleware/logging.py`** — per-request correlation IDs (`X-Request-ID`,
+  honoring inbound IDs) and method/path/status/duration logging. No secrets logged.
+- **`api/main.py`** — logging middleware applied globally; `require_api_key`
+  guards `/findings`, `/audit`, and the scan/approve routes; `/health`, `/`,
+  and the HMAC-verified `/events/github` webhook stay public by design.
+  `/health` now reports `auth_enforced`.
+- **`.env.example`** — documents `CONCORD_API_KEY` with a generation command.
+
+**Tests added (11 new; 48 total passing)**
+- `tests/integration/test_auth.py` — open dev mode, enforced mode, missing/wrong
+  key, Bearer and X-API-Key acceptance, audit route protection, public routes
+  staying open, webhook remaining key-free, and correlation-ID header presence.
+
+**Verified:** live smoke test — protected routes 401 without/with wrong key,
+200 with the right key; public demo endpoint 200; `X-Request-ID` emitted.
+
+---
+
+### Slice 1 — SecurityPolicyAgent + durable persistence (prior session)
+
 
 ### Implemented
 - **`SecurityPolicyAgent`** (`agents/security/agent.py`) — replaced the
@@ -106,7 +134,7 @@ LLM self-report — this invariant is preserved and tested.
 | Check | Command | Result |
 |-------|---------|--------|
 | Lint | `ruff check .` | PASS (clean) |
-| Unit + integration tests | `pytest tests/` | 37 passed |
+| Unit + integration tests | `pytest tests/` | 48 passed |
 | API smoke | FastAPI `TestClient` demo → findings → audit | PASS (data persisted + readable) |
 | Orchestrator run | security agent scores 0.85 and enters arbitration | PASS (verified in logs) |
 | No stray artifacts | `ls *.db` | none committed |
@@ -116,7 +144,7 @@ LLM self-report — this invariant is preserved and tested.
 ## 5. Prioritized remaining roadmap (honest)
 
 **P0 (security / correctness)**
-- Wire `api/middleware/auth.py` into `api/main.py` and document the auth model.
+- ~~Wire `api/middleware/auth.py` into `api/main.py`~~ — **DONE** (slice 2).
 - Add TLS verification (and optional mTLS) to `SecureTransport`.
 - Replace `context.sanitize_tool_output` truncation stub with real prompt-injection defenses, or rename it to reflect what it does.
 
