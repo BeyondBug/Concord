@@ -1,65 +1,48 @@
 """
 api/routes/findings.py
-In-memory findings store + REST API.
-Phase 1: replace _FindingsStore with PostgreSQL.
+Findings REST API backed by the persistent store (core.persistence).
+
+``store`` is kept as a thin adapter with the historical method names
+(``add``/``get``/``all``/``stats``) so existing callers such as
+api/routes/scan.py keep working, but every call now reads and writes the
+durable SQLite-backed store instead of an in-memory list.
 """
 import os
-import threading
-from datetime import datetime
 
 from fastapi import APIRouter, HTTPException
+
+from core.persistence import FindingRecord, get_store
 
 router = APIRouter(prefix="/findings", tags=["findings"])
 
 
-class _FindingsStore:
-    """Thread-safe in-memory singleton. Replaced by PostgreSQL in Phase 1."""
-    _instance = None
-    _lock = threading.Lock()
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._data = []
-        return cls._instance
+class _StoreAdapter:
+    """Backwards-compatible facade over the durable persistence store."""
 
     def add(self, finding_id: str, severity: str, artifact: str,
             repo: str, source: str, path: str, result: dict) -> None:
-        with self._lock:
-            self._data.insert(0, {
-                "id": finding_id,
-                "severity": severity,
-                "artifact": artifact,
-                "repo": repo,
-                "source": source,
-                "path": path,
-                "agent": result.get("agent"),
-                "result": result,
-                "timestamp": datetime.utcnow().isoformat(),
-            })
-            self._data = self._data[:200]
+        get_store().add_finding(FindingRecord(
+            id=finding_id,
+            severity=severity,
+            artifact=artifact,
+            repo=repo,
+            source=source,
+            path=path,
+            agent=result.get("agent"),
+            result=result,
+        ))
 
     def all(self, limit: int = 50) -> list:
-        with self._lock:
-            return list(self._data[:limit])
+        return get_store().list_findings(limit=limit)
 
     def get(self, finding_id: str) -> dict | None:
-        with self._lock:
-            return next((f for f in self._data if f["id"] == finding_id), None)
+        return get_store().get_finding(finding_id)
 
     def stats(self) -> dict:
-        with self._lock:
-            total = len(self._data)
-            fast = sum(1 for f in self._data if f.get("path") == "fast_path")
-            tiebreaks = sum(
-                1 for f in self._data
-                if f.get("result", {}).get("auto_resolved") is False
-            )
-            return {"total": total, "fast": fast,
-                    "ai": total - fast, "tiebreaks": tiebreaks}
+        return get_store().finding_stats()
 
 
-store = _FindingsStore()
+store = _StoreAdapter()
 
 
 @router.get("/")
