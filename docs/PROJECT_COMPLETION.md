@@ -40,7 +40,7 @@ LLM self-report — this invariant is preserved and tested.
 
 | Area | Problem / State | Severity | Current State | Required Change | Files | Impl Status | Tests | Verification |
 |------|-----------------|----------|---------------|-----------------|-------|-------------|-------|--------------|
-| Triage gate + rules | Works; dedup is a stub | Low | Real | Redis-backed dedup later | `core/triage/**` | PARTIAL | yes | `test_triage.py` passes |
+| Triage gate + rules | Works; dedup now real | Low | Real | none pending | `core/triage/**` | DONE | yes | `test_triage.py`, `test_dedup.py` |
 | Arbitration + confidence | Works, deterministic formula | — | Real | none | `core/arbitration/**` | DONE | yes | `test_arbitration.py`, `test_confidence.py` |
 | Orchestrator flow | Real; used to swallow store errors silently | Med | Real | **Fixed** — errors now logged, not swallowed | `core/orchestrator/orchestrator.py` | DONE | yes | `test_orchestrator.py` + new persistence tests |
 | InfraAgent / CICDAgent | Real regex scans (TF / K8s) | — | Real | swap for MCP later | `agents/infra`, `agents/cicd` | PARTIAL | indirect | drive via demo endpoint |
@@ -52,7 +52,9 @@ LLM self-report — this invariant is preserved and tested.
 | API auth | `middleware/auth.py` exists but not wired into `main.py` | High | **Implemented** | API-key dependency + fail-safe dev mode | `api/main.py`, `api/middleware/auth.py`, `api/middleware/logging.py` | **DONE** | yes | `test_auth.py` (11) + live smoke |
 | MCP transport | No TLS verify config, no mTLS | Med | **Hardened** | https-by-default, CA bundle, mTLS, insecure opt-in | `core/mcp_runtime/transport.py`, `core/models/manifest.py` | **DONE** | yes | `test_transport_security.py` (14) |
 | Credential broker | Scoped per-connector env tokens, no master | — | Real | rotation readiness | `core/credential_broker/broker.py` | PARTIAL | no | — |
-| `context.sanitize_tool_output` | Only truncates length; labeled as injection defense | Med | STUB | real sanitization | `core/orchestrator/context.py` | STUB | no | — |
+| `context.sanitize_tool_output` | Only truncated length; labeled as injection defense | Med | **Implemented + wired** | real sanitization, delimiting, flagging; used in LLM path | `core/orchestrator/context.py`, `core/orchestrator/orchestrator.py` | **DONE** | yes | `test_sanitize.py` (11) |
+| Dedup triage rule | Redis TODO; always returned no-match | Med | **Implemented** | Redis store + in-memory TTL fallback | `core/triage/rules/dedup.py`, `core/triage/rules/dedup_store.py` | **DONE** | yes | `test_dedup.py` (11) |
+| `utcnow()` deprecation | Remained in `finding.py`, `scan.py`, tests | Low | **Fixed everywhere** | timezone-aware `datetime.now(UTC)` | `core/models/finding.py`, `api/routes/scan.py`, tests | **DONE** | n/a | suite warning-free (only 3rd-party warnings remain) |
 | CLI | Single Typer file | Med | PARTIAL | expand + JSON mode | `concord_cli/main.py` | PARTIAL | no | — |
 | Web dashboard | One static HTML file | Med | PARTIAL | real frontend later | `api/templates/dashboard.html` | PARTIAL | no | — |
 | Approvals workflow | `/approve` endpoint exists; GitHub-gated | Med | PARTIAL | UI + audit of approval | `api/routes/scan.py` | PARTIAL | no | — |
@@ -62,6 +64,48 @@ LLM self-report — this invariant is preserved and tested.
 ---
 
 ## 3. What this session actually changed (verified)
+
+### Slice 5 — Redis-backed dedup + suite cleanup (this session)
+
+**Implemented**
+- **`core/triage/rules/dedup_store.py`** — fingerprint stores for dedup. A
+  finding fingerprint is a SHA-256 over its identity (id/source/artifact/
+  severity), deliberately excluding the volatile timestamp. `RedisDedupStore`
+  uses atomic `SET NX EX` (shared across processes); `InMemoryDedupStore` is a
+  per-process TTL fallback. `get_dedup_store()` picks Redis when `REDIS_URL` is
+  reachable and **gracefully falls back** to in-memory otherwise (fail-safe —
+  triage never crashes on a missing service).
+- **`core/triage/rules/dedup.py`** — `DedupRule` now records fingerprints and
+  fast-paths duplicates seen within the TTL. No-arg constructor preserved for
+  the orchestrator; a store can be injected in tests.
+
+**Tests added (11):** `tests/unit/test_dedup.py` — fingerprint stability,
+in-memory first-unseen-then-seen, TTL, Redis fallback (unset + unreachable),
+rule behaviour, and Redis semantics against a fake client.
+
+**Cleanup:** removed all `datetime.utcnow()` deprecations from Concord code
+(`core/models/finding.py`, `api/routes/scan.py`) and the test suite. The suite
+is now warning-free except two third-party (Starlette/anyio) warnings.
+
+### Slice 4 — real prompt-injection sanitization (this session)
+
+**Implemented**
+- **`core/orchestrator/context.py`** — `sanitize_tool_output` replaced the
+  truncate-only stub with real defenses: length cap, control-char and
+  zero-width/bidi stripping, neutralized role/protocol markers and code fences,
+  and injection-phrase flagging. Output is always wrapped in an explicit
+  `UNTRUSTED_TOOL_OUTPUT` delimiter so the prompt can mark it as data. Scope and
+  residual risk are documented in the module (defense-in-depth, not a guarantee;
+  relies on the system prompt + the existing human approval gate).
+- **`core/orchestrator/orchestrator.py`** — the sanitizer is now **wired into
+  the LLM path**: untrusted `finding.title`/`finding.description` are sanitized
+  before being sent to the model (previously they were declared-but-unused).
+
+**Tests added (11):** `tests/unit/test_sanitize.py` — delimiting, length cap,
+control/zero-width/bidi stripping, marker neutralization, fence downgrade,
+injection flagging (kept-not-dropped), clean passthrough, coercion.
+
+---
 
 ### Slice 3 — MCP transport TLS hardening (this session)
 
@@ -161,7 +205,7 @@ the kubernetes/observability MCP connectors are wired in.
 | Check | Command | Result |
 |-------|---------|--------|
 | Lint | `ruff check .` | PASS (clean) |
-| Unit + integration tests | `pytest tests/` | 62 passed |
+| Unit + integration tests | `pytest tests/` | 84 passed |
 | API smoke | FastAPI `TestClient` demo → findings → audit | PASS (data persisted + readable) |
 | Orchestrator run | security agent scores 0.85 and enters arbitration | PASS (verified in logs) |
 | No stray artifacts | `ls *.db` | none committed |
@@ -173,11 +217,11 @@ the kubernetes/observability MCP connectors are wired in.
 **P0 (security / correctness)**
 - ~~Wire `api/middleware/auth.py` into `api/main.py`~~ — **DONE** (slice 2).
 - ~~Add TLS verification (and optional mTLS) to `SecureTransport`~~ — **DONE** (slice 3).
-- Replace `context.sanitize_tool_output` truncation stub with real prompt-injection defenses, or rename it to reflect what it does.
+- ~~Replace `context.sanitize_tool_output` truncation stub~~ — **DONE** (slice 4).
 
 **P1 (core functionality)**
 - Implement or connector-gate the kubernetes / observability agents.
-- Redis-backed dedup rule (currently a stub).
+- ~~Redis-backed dedup rule~~ — **DONE** (slice 5).
 - Persist approval decisions and their outcomes to the audit table.
 
 **P2 (reliability / ops)**

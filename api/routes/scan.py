@@ -4,7 +4,7 @@ Triggers a real CRMS scan and handles PR approval workflow.
 """
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
@@ -21,7 +21,7 @@ async def scan_crms_endpoint(background_tasks: BackgroundTasks):
     if _scan_state.get("status") == "scanning":
         return {"status": "already_scanning", "message": "Scan in progress"}
     _scan_state["status"]   = "scanning"
-    _scan_state["started"]  = datetime.utcnow().isoformat()
+    _scan_state["started"]  = datetime.now(UTC).isoformat()
     _scan_state["error"]    = None
     background_tasks.add_task(_run_scan)
     return {"status": "scanning", "message": "CRMS scan started"}
@@ -49,7 +49,7 @@ async def approve_finding(finding_id: str, agent: str):
 
     # Mark as resolved in store
     result["approved_by"]   = agent
-    result["approved_at"]   = datetime.utcnow().isoformat()
+    result["approved_at"]   = datetime.now(UTC).isoformat()
     result["auto_resolved"] = True   # now resolved by human
 
     github_url = None
@@ -128,7 +128,7 @@ async def _run_scan():
         sev   = ("CRITICAL" if total > 10 else
                  "HIGH"     if total > 3  else
                  "MEDIUM"   if total > 0  else "LOW")
-        fid   = f"CRMS-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+        fid   = f"CRMS-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
 
         _scan_state["message"] = f"Scanned — {total} violations found"
 

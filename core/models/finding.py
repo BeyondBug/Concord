@@ -1,6 +1,6 @@
 """Finding — the core data unit that flows through all of Concord."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -13,7 +13,7 @@ class Finding:
     title: str
     description: str
     raw: dict[str, Any]            # original scanner output (SARIF 2.1.0 or native)
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
     repository: str = ""           # source repo (e.g. BeyondBug/CRMS)
     pr_number: int | None = None   # PR that triggered this
     commit_sha: str = ""
