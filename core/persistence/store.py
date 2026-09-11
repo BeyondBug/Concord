@@ -211,6 +211,14 @@ class SQLiteStore:
         return {"total": total, "fast": fast, "ai": total - fast,
                 "tiebreaks": tiebreaks}
 
+    def severity_breakdown(self) -> dict[str, int]:
+        """Count findings grouped by severity (for the Security view)."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT severity, COUNT(*) AS n FROM findings GROUP BY severity"
+            ).fetchall()
+        return {r["severity"]: r["n"] for r in rows}
+
     # ── Audit ─────────────────────────────────────────────────────────
 
     def add_audit(self, record: AuditRecord) -> None:

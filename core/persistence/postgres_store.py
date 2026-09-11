@@ -147,6 +147,13 @@ class PostgresStore:
                 pending.append(d)
         return pending
 
+    def severity_breakdown(self) -> dict[str, int]:
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT severity, COUNT(*) FROM findings GROUP BY severity"
+            ).fetchall()
+        return {r[0]: r[1] for r in rows}
+
     def finding_stats(self) -> dict[str, int]:
         with self._pool.connection() as conn:
             total = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]

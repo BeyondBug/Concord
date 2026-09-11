@@ -54,6 +54,12 @@ async def list_findings(limit: int = 50):
     }
 
 
+@router.get("/severity")
+async def severity_breakdown():
+    """Findings grouped by severity (for the Security view)."""
+    return {"by_severity": get_store().severity_breakdown()}
+
+
 @router.get("/{finding_id}")
 async def get_finding(finding_id: str):
     f = store.get(finding_id)

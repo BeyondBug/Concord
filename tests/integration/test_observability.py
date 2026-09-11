@@ -145,3 +145,29 @@ def _restore():
 
     import api.main as main_mod
     importlib.reload(main_mod)
+
+
+def test_severity_endpoint(client):
+    from core.persistence import FindingRecord
+    for sev in ["CRITICAL", "HIGH", "HIGH"]:
+        store_mod.get_store().add_finding(FindingRecord(
+            id=f"SEV-{sev}-{id(object())}", severity=sev, artifact="x",
+            repo="", source="", path="fast_path", agent=None, result={}))
+    r = client.get("/findings/severity")
+    assert r.status_code == 200
+    bd = r.json()["by_severity"]
+    assert bd["HIGH"] == 2
+    assert bd["CRITICAL"] == 1
+
+
+def test_version_endpoint(client):
+    r = client.get("/version")
+    assert r.status_code == 200
+    assert r.json()["version"] == "0.1.0"
+
+
+def test_dashboard_has_favicon(client):
+    # The dashboard now embeds an inline SVG favicon (no more /favicon.ico 404).
+    r = client.get("/")
+    assert r.status_code == 200
+    assert 'rel="icon"' in r.text

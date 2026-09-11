@@ -65,6 +65,52 @@ LLM self-report — this invariant is preserved and tested.
 
 ## 3. What this session actually changed (verified)
 
+### Slice 18 — dashboard UI fixes + polish (this session)
+
+Fixes from a real screenshot review:
+- **Sidebar agent list corrected.** It hardcoded the pre-implementation state:
+  Security showed as inactive "OPA / Semgrep · Phase 3". Security is a real
+  active agent — now shown active ("Source scan · 0.85"), with 3 active agents
+  (Infra/CI/CD/Security) grouped and the two MCP agents labeled "planned"
+  instead of internal phase numbers. Now consistent with the Overview card.
+- **Header overlap fixed.** Tabs are now the primary nav (first), the descriptor
+  is secondary and `nowrap`, and hides below 1100px so it never collides with
+  the logo/tabs.
+- **Favicon added** (inline SVG) — removes the `GET /favicon.ico 404`.
+- **`GET /version`** endpoint added for API/CLI parity.
+
+Tests: `test_version_endpoint`, `test_dashboard_has_favicon`. **131 passing.**
+
+---
+
+
+### Slices 16–17 — CI hardening + Security view (this session)
+
+**Slice 16 — CI/CD workflow hardening.** All three GitHub Actions workflows
+hardened: least-privilege top-level `permissions: contents: read` (jobs elevate
+only what they need); `ci.yml` now runs the **full** suite (was unit-only) with
+pip caching + concurrency; `security.yml` pins `trivy-action` to a released tag
+(was `@master`) and adds a `pip-audit` job; `release.yml` gets scoped
+permissions, GHCR login, and build-push. YAML validated; CI steps reproduced
+locally green.
+
+**Slice 17 — Security dashboard view + endpoint.** New `GET /findings/severity`
+returning a real severity breakdown (added `severity_breakdown()` to both SQLite
+and Postgres stores; declared before the dynamic `/{id}` route to avoid
+shadowing). New dashboard **Security** tab rendering live severity-distribution
+bars. Tests: store + API (`test_persistence`, `test_observability`). Verified
+live: `{CRITICAL:2, HIGH:1, LOW:1}` aggregation rendered.
+
+**Note on Terraform:** `infra/*.tf` are `# TODO Phase 4` stubs. No Terraform was
+written this session because no `terraform` binary is available here to validate
+it — writing unvalidated HCL would violate the no-fabrication rule. Left honestly
+as pending.
+
+**Total: 129 passing tests.**
+
+---
+
+
 ### Slices 13–15 — approval lifecycle, Overview view, docs (this session)
 
 **Slice 13 — approval reject/expire.** `/events/findings/{id}/reject` and
@@ -367,7 +413,7 @@ the kubernetes/observability MCP connectors are wired in.
 | Check | Command | Result |
 |-------|---------|--------|
 | Lint | `ruff check .` | PASS (clean) |
-| Unit + integration tests | `pytest tests/` | 127 passed (1 slow) |
+| Unit + integration tests | `pytest tests/` | 131 passed (1 slow) |
 | API smoke | FastAPI `TestClient` demo → findings → audit | PASS (data persisted + readable) |
 | Orchestrator run | security agent scores 0.85 and enters arbitration | PASS (verified in logs) |
 | No stray artifacts | `ls *.db` | none committed |

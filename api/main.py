@@ -57,3 +57,8 @@ def health():
         "version": "0.1.0",
         "auth_enforced": auth_is_enforced(),
     }
+
+
+@app.get("/version")
+def version():
+    return {"service": "concord", "version": "0.1.0"}
