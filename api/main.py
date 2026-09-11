@@ -1,5 +1,6 @@
 """Concord FastAPI application."""
 import pathlib
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from fastapi.responses import HTMLResponse
@@ -7,8 +8,22 @@ from fastapi.responses import HTMLResponse
 from api.middleware.auth import auth_is_enforced, require_api_key
 from api.middleware.logging import RequestLoggingMiddleware
 from api.routes import audit, events, findings, scan
+from core.observability.logging_config import configure_logging
 
-app = FastAPI(title="Concord", version="0.1.0")
+configure_logging()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Build the persistence backend once, at startup, so any Postgres
+    # connection timeout happens here (before serving traffic) rather than
+    # inside the first request that writes a finding.
+    from core.persistence import get_store
+    get_store()
+    yield
+
+
+app = FastAPI(title="Concord", version="0.1.0", lifespan=lifespan)
 
 # Correlation IDs + request logging for every request.
 app.add_middleware(RequestLoggingMiddleware)

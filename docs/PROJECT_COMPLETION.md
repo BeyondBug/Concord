@@ -55,8 +55,8 @@ LLM self-report — this invariant is preserved and tested.
 | `context.sanitize_tool_output` | Only truncated length; labeled as injection defense | Med | **Implemented + wired** | real sanitization, delimiting, flagging; used in LLM path | `core/orchestrator/context.py`, `core/orchestrator/orchestrator.py` | **DONE** | yes | `test_sanitize.py` (11) |
 | Dedup triage rule | Redis TODO; always returned no-match | Med | **Implemented** | Redis store + in-memory TTL fallback | `core/triage/rules/dedup.py`, `core/triage/rules/dedup_store.py` | **DONE** | yes | `test_dedup.py` (11) |
 | `utcnow()` deprecation | Remained in `finding.py`, `scan.py`, tests | Low | **Fixed everywhere** | timezone-aware `datetime.now(UTC)` | `core/models/finding.py`, `api/routes/scan.py`, tests | **DONE** | n/a | suite warning-free (only 3rd-party warnings remain) |
-| CLI | Single Typer file | Med | PARTIAL | expand + JSON mode | `concord_cli/main.py` | PARTIAL | no | — |
-| Web dashboard | One static HTML file | Med | PARTIAL | real frontend later | `api/templates/dashboard.html` | PARTIAL | no | — |
+| CLI | Typer CLI; no JSON mode, few commands | Med | **Expanded** | --json machine mode, audit/approvals/approve/health commands, exit codes, no-color safe | `concord_cli/main.py` | **DONE** | yes | `test_cli.py` (12) + live smoke |
+| Web dashboard | One static HTML, findings-only | Med | **Extended (read-only)** | tabbed Findings/Approvals/Audit views on live API, no mock data | `api/templates/dashboard.html` | **PARTIAL→DONE (read views)** | manual+live | live smoke: 3 endpoints render real data |
 | Approvals workflow | `/approve` mutated a copy; no persist, no audit | High | **Fixed** | durable resolution + audit record + pending-list API + candidate guard | `api/routes/scan.py`, `core/persistence/store.py` | **DONE** | yes | `test_approvals.py` (7) + live smoke |
 | Docker / Helm / Terraform | Present, minimal, unhardened | Med | **Hardened (Docker+Helm)** | multi-stage non-root image, healthcheck, .dockerignore; compose loopback+read-only+healthchecks; real Helm templates w/ securityContext, probes, resources, SA | `Dockerfile`, `.dockerignore`, `docker-compose.yml`, `helm/concord/**` | **DONE (unverified build)** | n/a | YAML structure checked; `docker build`/`helm template` not runnable in sandbox |
 | `utcnow()` deprecation | Throughout production code | Low | **Fixed in prod code** | timezone-aware | orchestrator, persistence | DONE | n/a | ruff clean |
@@ -64,6 +64,58 @@ LLM self-report — this invariant is preserved and tested.
 ---
 
 ## 3. What this session actually changed (verified)
+
+### Slice 12 — dashboard Approvals + Audit views + startup fix (this session)
+
+**Latency fix (from a real observation):** with `POSTGRES_URL` set but no
+Postgres running, the first finding write blocked ~7.4s on the connection
+timeout *inside the request*. The store is now built in a FastAPI **lifespan**
+startup handler, so the one-time fallback happens at boot. Measured: same
+request dropped from 7.4s to 0.027s.
+
+**Dashboard (read-only, real API, no mock data)**
+- **`api/templates/dashboard.html`** — added a tabbed nav (Findings / Approvals
+  / Audit). The existing findings view is unchanged. New **Approvals** view
+  lists `/events/approvals/pending` with inline approve buttons (reusing the
+  existing approve call); new **Audit** view renders `/audit/` including the
+  correlation IDs from slice 10. A live count badge shows pending approvals.
+  All data comes from the live API; empty states render when the API is empty.
+  HTML output is escaped to avoid injection from finding fields.
+
+**Verified live:** dashboard served with all views; `/findings/`,
+`/events/approvals/pending`, `/audit/` all return real, renderable data
+(2 findings, 1 pending, 2 audit rows with correlation IDs). Startup fallback
+confirmed fast.
+
+**Honest scope:** these are **read-only views** (plus the existing approve
+action) wired to real endpoints — not the full "premium" multi-view dashboard
+from the task doc. No AI-assistant view, incidents, k8s, IaC, or settings pages;
+those remain future work. Nothing is faked.
+
+---
+
+
+### Slice 11 — CLI expansion with JSON mode (this session)
+
+**Implemented** (extends the existing Typer CLI; all prior commands kept)
+- **`concord_cli/main.py`** — added `--json` machine-readable mode to every data
+  command (or `CONCORD_OUTPUT=json`); colour auto-disabled when stdout is not a
+  TTY or `NO_COLOR` is set, so piped output is never decorated. New commands:
+  `health`, `audit` (shows correlation IDs), `approvals` (pending queue),
+  `approve <finding> <agent>`. Shared API-client helpers send the API key from
+  `CONCORD_API_KEY`. Distinct exit codes: 1 for a rejected action, 2 for an
+  unreachable API.
+
+**Tests added (12; 121 total):** `tests/unit/test_cli.py` — table + JSON output
+for health/findings/audit/approvals, approve success + 400 rejection exit code,
+unreachable-API exit code, and agents listing, via Typer's CliRunner with the
+API helpers monkeypatched (no live server needed).
+
+**Verified live:** against a running API, `health/findings/audit --json` produce
+clean JSON parsed by a separate process (no decoration leak).
+
+---
+
 
 ### Slice 9 — PostgreSQL backend behind get_store() (this session)
 
@@ -292,7 +344,7 @@ the kubernetes/observability MCP connectors are wired in.
 | Check | Command | Result |
 |-------|---------|--------|
 | Lint | `ruff check .` | PASS (clean) |
-| Unit + integration tests | `pytest tests/` | 101 passed (1 slow) |
+| Unit + integration tests | `pytest tests/` | 121 passed (1 slow) |
 | API smoke | FastAPI `TestClient` demo → findings → audit | PASS (data persisted + readable) |
 | Orchestrator run | security agent scores 0.85 and enters arbitration | PASS (verified in logs) |
 | No stray artifacts | `ls *.db` | none committed |
@@ -318,7 +370,7 @@ the kubernetes/observability MCP connectors are wired in.
 
 **P3 (product polish)**
 - Real web dashboard (framework TBD) beyond the single static HTML page.
-- Expanded CLI with `--json` machine mode and richer subcommands.
+- ~~Expanded CLI with `--json` machine mode and richer subcommands~~ — **DONE** (slice 11).
 
 ---
 

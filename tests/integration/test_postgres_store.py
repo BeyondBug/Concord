@@ -162,11 +162,12 @@ def test_list_pending_filters_unresolved():
 
 
 def test_list_audit_shapes_rows():
-    rows = [("F1", "fast_path", "low sev", None, "t")]
+    rows = [("F1", "fast_path", "low sev", None, "req-123", "t")]
     store, _ = _store_with({"FROM audit": rows})
     entries = store.list_audit()
     assert entries[0]["finding_id"] == "F1"
     assert entries[0]["reason"] == "low sev"
+    assert entries[0]["correlation_id"] == "req-123"
 
 
 # ── _as_dict helper ───────────────────────────────────────────────────

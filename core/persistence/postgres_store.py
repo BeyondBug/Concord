@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS audit (
     path       TEXT NOT NULL,
     reason     TEXT NOT NULL,
     agent      TEXT,
+    correlation_id TEXT NOT NULL DEFAULT '-',
     timestamp  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_finding ON audit(finding_id);
@@ -72,6 +73,15 @@ class PostgresStore:
         self._pool.open(wait=True, timeout=5)
         with self._pool.connection() as conn:
             conn.execute(_SCHEMA)
+            # Additive migration for databases created by an older schema.
+            conn.execute(
+                "ALTER TABLE audit ADD COLUMN IF NOT EXISTS "
+                "correlation_id TEXT NOT NULL DEFAULT '-'"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_audit_correlation "
+                "ON audit(correlation_id)"
+            )
         logger.info("PostgresStore ready")
 
     # ── Findings ──────────────────────────────────────────────────────
@@ -155,21 +165,23 @@ class PostgresStore:
     def add_audit(self, record) -> None:
         with self._pool.connection() as conn:
             conn.execute(
-                "INSERT INTO audit (finding_id, path, reason, agent, timestamp) "
-                "VALUES (%s, %s, %s, %s, %s)",
+                "INSERT INTO audit "
+                "(finding_id, path, reason, agent, correlation_id, timestamp) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
                 (record.finding_id, record.path, record.reason,
-                 record.agent, record.timestamp),
+                 record.agent, record.correlation_id, record.timestamp),
             )
 
     def list_audit(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 1000))
         with self._pool.connection() as conn:
             rows = conn.execute(
-                "SELECT finding_id, path, reason, agent, timestamp "
+                "SELECT finding_id, path, reason, agent, correlation_id, timestamp "
                 "FROM audit ORDER BY row_id DESC LIMIT %s", (limit,),
             ).fetchall()
         return [{"finding_id": r[0], "path": r[1], "reason": r[2],
-                 "agent": r[3], "timestamp": r[4]} for r in rows]
+                 "agent": r[3], "correlation_id": r[4], "timestamp": r[5]}
+                for r in rows]
 
     # ── Maintenance ───────────────────────────────────────────────────
 

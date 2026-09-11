@@ -51,7 +51,14 @@ class AuditRecord:
     path: str
     reason: str
     agent: str | None
+    correlation_id: str = field(default_factory=lambda: _current_correlation_id())
     timestamp: str = field(default_factory=_utcnow)
+
+
+def _current_correlation_id() -> str:
+    # Imported lazily to avoid a hard import cycle at module load.
+    from core.observability import get_correlation_id
+    return get_correlation_id()
 
 
 _SCHEMA = """
@@ -76,6 +83,7 @@ CREATE TABLE IF NOT EXISTS audit (
     path       TEXT NOT NULL,
     reason     TEXT NOT NULL,
     agent      TEXT,
+    correlation_id TEXT NOT NULL DEFAULT '-',
     timestamp  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_finding ON audit(finding_id);
@@ -94,7 +102,24 @@ class SQLiteStore:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL;")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         logger.info("SQLiteStore ready at %s", self._path)
+
+    def _migrate(self) -> None:
+        """Additive migrations for databases created by an older schema."""
+        cols = {row["name"] for row in
+                self._conn.execute("PRAGMA table_info(audit)").fetchall()}
+        if "correlation_id" not in cols:
+            self._conn.execute(
+                "ALTER TABLE audit ADD COLUMN correlation_id TEXT NOT NULL "
+                "DEFAULT '-'"
+            )
+            logger.info("SQLiteStore: migrated audit table (correlation_id)")
+        # Safe now that the column exists (fresh or migrated).
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_correlation "
+            "ON audit(correlation_id)"
+        )
 
     # ── Findings ──────────────────────────────────────────────────────
 
@@ -191,17 +216,18 @@ class SQLiteStore:
     def add_audit(self, record: AuditRecord) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO audit (finding_id, path, reason, agent, timestamp) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO audit "
+                "(finding_id, path, reason, agent, correlation_id, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (record.finding_id, record.path, record.reason,
-                 record.agent, record.timestamp),
+                 record.agent, record.correlation_id, record.timestamp),
             )
 
     def list_audit(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 1000))
         with self._lock:
             rows = self._conn.execute(
-                "SELECT finding_id, path, reason, agent, timestamp "
+                "SELECT finding_id, path, reason, agent, correlation_id, timestamp "
                 "FROM audit ORDER BY row_id DESC LIMIT ?", (limit,)
             ).fetchall()
         return [dict(r) for r in rows]

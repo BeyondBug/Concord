@@ -16,6 +16,8 @@ import uuid
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
+from core.observability import reset_correlation_id, set_correlation_id
+
 logger = logging.getLogger("concord.request")
 
 _REQUEST_ID_HEADER = "X-Request-ID"
@@ -25,6 +27,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         request_id = request.headers.get(_REQUEST_ID_HEADER) or uuid.uuid4().hex[:16]
         request.state.request_id = request_id
+        token = set_correlation_id(request_id)
 
         start = time.perf_counter()
         try:
@@ -36,6 +39,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 request_id, request.method, request.url.path, duration_ms,
             )
             raise
+        finally:
+            reset_correlation_id(token)
 
         duration_ms = (time.perf_counter() - start) * 1000
         logger.info(
