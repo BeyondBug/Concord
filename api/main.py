@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse
 
 from api.middleware.auth import auth_is_enforced, require_api_key
 from api.middleware.logging import RequestLoggingMiddleware
-from api.routes import audit, events, findings, scan
+from api.routes import agents, audit, events, findings, scan
 from core.observability.logging_config import configure_logging
 
 configure_logging()
@@ -40,6 +40,7 @@ _protected = Depends(require_api_key)
 app.include_router(findings.router, dependencies=[_protected])
 app.include_router(audit.router, dependencies=[_protected])
 app.include_router(scan.router, dependencies=[_protected])
+app.include_router(agents.router, dependencies=[_protected])
 
 _DASHBOARD = pathlib.Path(__file__).parent / "templates" / "dashboard.html"
 

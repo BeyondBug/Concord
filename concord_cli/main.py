@@ -111,11 +111,19 @@ def health(json: bool = typer.Option(False, "--json", help="Machine-readable out
 @app.command()
 def findings(
     limit: int = typer.Option(10, "--limit", "-n"),
+    severity: str = typer.Option(None, "--severity", "-s",
+                                 help="Filter: CRITICAL|HIGH|MEDIUM|LOW"),
+    path: str = typer.Option(None, "--path", help="Filter: fast_path|ai_path"),
     json: bool = typer.Option(False, "--json", help="Machine-readable output."),
 ):
     """Show recent findings from the live API."""
+    params = {"limit": limit}
+    if severity:
+        params["severity"] = severity
+    if path:
+        params["path"] = path
     try:
-        d = _api_get("/findings/", params={"limit": limit})
+        d = _api_get("/findings/", params=params)
     except Exception as e:  # noqa: BLE001
         _die_unreachable(e)
 
@@ -294,6 +302,58 @@ def stats(json: bool = typer.Option(False, "--json", help="Machine-readable outp
 
 
 @app.command()
+def diagnostics(json: bool = typer.Option(False, "--json", help="Machine-readable output.")):
+    """Run environment + API connectivity checks and report status."""
+    checks = []
+
+    # API reachability + health
+    api_ok = False
+    health = {}
+    try:
+        health = _api_get("/health")
+        api_ok = health.get("status") == "ok"
+        checks.append(("API reachable", api_ok, API))
+    except Exception as e:  # noqa: BLE001
+        checks.append(("API reachable", False, f"{API} ({e})"))
+
+    if api_ok:
+        checks.append(("Auth enforced", bool(health.get("auth_enforced")),
+                       "enforced" if health.get("auth_enforced") else "open dev mode"))
+
+    # Local config signals
+    checks.append(("CONCORD_API_KEY set", bool(API_KEY), "yes" if API_KEY else "no (dev mode)"))
+    checks.append(("CONCORD_API_URL", True, API))
+    checks.append(("Output mode", True,
+                   "json" if os.getenv("CONCORD_OUTPUT", "").lower() == "json" else "human"))
+
+    if _want_json(json):
+        _emit_json({"checks": [{"name": n, "ok": ok, "detail": d}
+                               for n, ok, d in checks],
+                    "healthy": all(ok for _, ok, _ in checks if _ != "Auth enforced")})
+        return
+
+    con.print("\n  [bold]Concord diagnostics[/bold]\n")
+    for name, ok, detail in checks:
+        mark = "[green]✓[/green]" if ok else "[red]✗[/red]"
+        con.print(f"  {mark}  {name:<22}[dim]{detail}[/dim]")
+    con.print()
+    if not api_ok:
+        con.print("  [yellow]API not reachable.[/yellow] Start it with:")
+        con.print("    [bold]uvicorn api.main:app --reload[/bold]\n")
+        raise typer.Exit(2)
+
+
+@app.command()
+def completion():
+    """Show how to enable shell completion for the concord CLI."""
+    con.print("\n  Enable shell completion (Typer built-in):\n")
+    con.print("    [bold]python concord_cli/main.py --install-completion[/bold]")
+    con.print("  then restart your shell. Supported: bash, zsh, fish, PowerShell.\n")
+    con.print("  To preview the script without installing:")
+    con.print("    [bold]python concord_cli/main.py --show-completion[/bold]\n")
+
+
+@app.command()
 def invoke(
     severity: str = typer.Option("CRITICAL", "--severity", "-s",
                                  help="CRITICAL | HIGH | MEDIUM | LOW"),
@@ -312,20 +372,24 @@ def invoke(
 
 
 @app.command()
-def agents():
+def agents(json: bool = typer.Option(False, "--json", help="Machine-readable output.")):
     """List domain agents and whether each is wired to a real backend."""
+    try:
+        d = _api_get("/agents/")
+    except Exception as e:  # noqa: BLE001
+        _die_unreachable(e)
+    if _want_json(json):
+        _emit_json(d)
+        return
     t = Table(title="Domain Agents", header_style="bold green")
     for col in ("Agent", "Backing", "Reliability", "Status"):
         t.add_column(col)
-    rows = [
-        ("infra",         "TerraSecure scanner", "0.92", "[green]● active[/green]"),
-        ("cicd",          "Trivy · Checkov",     "0.88", "[green]● active[/green]"),
-        ("security",      "source pattern scan", "0.85", "[green]● active[/green]"),
-        ("kubernetes",    "kagent (MCP)",        "0.82", "[dim]○ planned[/dim]"),
-        ("observability", "HolmesGPT (MCP)",     "0.80", "[dim]○ planned[/dim]"),
-    ]
-    for r in rows:
-        t.add_row(*r)
+    for a in d.get("agents", []):
+        status = a.get("status")
+        badge = ("[green]● active[/green]" if status == "active"
+                 else "[dim]○ planned[/dim]")
+        t.add_row(a.get("domain", ""), a.get("backing", ""),
+                  f"{a.get('reliability', 0):.2f}", badge)
     con.print(t)
 
 

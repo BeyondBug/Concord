@@ -171,3 +171,85 @@ def test_dashboard_has_favicon(client):
     r = client.get("/")
     assert r.status_code == 200
     assert 'rel="icon"' in r.text
+
+
+def test_agents_endpoint(client):
+    r = client.get("/agents/")
+    assert r.status_code == 200
+    d = r.json()
+    domains = {a["domain"]: a for a in d["agents"]}
+    # Security must be active (it's a real agent), kubernetes planned.
+    assert domains["security"]["status"] == "active"
+    assert domains["kubernetes"]["status"] == "planned"
+    assert d["active"] == 3
+    assert d["planned"] == 2
+
+
+def test_findings_severity_filter(client):
+    from core.persistence import FindingRecord
+    for sev in ["CRITICAL", "HIGH", "HIGH"]:
+        store_mod.get_store().add_finding(FindingRecord(
+            id=f"FL-{sev}-{id(object())}", severity=sev, artifact="x",
+            repo="", source="", path="fast_path", agent=None, result={}))
+    r = client.get("/findings/", params={"severity": "high"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["filters"]["severity"] == "high"
+    assert all(f["severity"] == "HIGH" for f in body["findings"])
+    assert len(body["findings"]) == 2
+
+
+def test_findings_path_filter(client):
+    from core.persistence import FindingRecord
+    store_mod.get_store().add_finding(FindingRecord(
+        id="PF-fast", severity="LOW", artifact="x", repo="", source="",
+        path="fast_path", agent=None, result={}))
+    store_mod.get_store().add_finding(FindingRecord(
+        id="PF-ai", severity="HIGH", artifact="x", repo="", source="",
+        path="ai_path", agent="infra", result={}))
+    r = client.get("/findings/", params={"path": "ai_path"})
+    ids = {f["id"] for f in r.json()["findings"]}
+    assert "PF-ai" in ids and "PF-fast" not in ids
+
+
+def test_finding_detail_with_timeline(client):
+    from core.persistence import AuditRecord, FindingRecord
+    store_mod.get_store().add_finding(FindingRecord(
+        id="D1", severity="HIGH", artifact="infra/main.tf", repo="r", source="s",
+        path="ai_path", agent="infra",
+        result={"auto_resolved": False, "agents": {"infra": 0.9, "cicd": 0.88}}))
+    store_mod.get_store().add_audit(AuditRecord(
+        finding_id="D1", path="ai_path", reason="human_tiebreak", agent="infra"))
+    r = client.get("/findings/D1/detail")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["finding"]["id"] == "D1"
+    assert d["agents"] == {"infra": 0.9, "cicd": 0.88}
+    assert len(d["timeline"]) == 1
+    assert d["timeline"][0]["reason"] == "human_tiebreak"
+
+
+def test_finding_detail_404(client):
+    assert client.get("/findings/ghost/detail").status_code == 404
+
+
+def test_incidents_grouping(client):
+    from core.persistence import FindingRecord
+    # Two findings on the same artifact, one CRITICAL unresolved.
+    store_mod.get_store().add_finding(FindingRecord(
+        id="I1", severity="LOW", artifact="app/db.tf", repo="", source="",
+        path="fast_path", agent=None, result={}))
+    store_mod.get_store().add_finding(FindingRecord(
+        id="I2", severity="CRITICAL", artifact="app/db.tf", repo="", source="",
+        path="ai_path", agent="infra", result={"auto_resolved": False}))
+    store_mod.get_store().add_finding(FindingRecord(
+        id="I3", severity="HIGH", artifact="app/api.tf", repo="", source="",
+        path="fast_path", agent=None, result={}))
+    r = client.get("/findings/incidents")
+    assert r.status_code == 200
+    inc = {i["artifact"]: i for i in r.json()["incidents"]}
+    assert inc["app/db.tf"]["count"] == 2
+    assert inc["app/db.tf"]["max_severity"] == "CRITICAL"
+    assert inc["app/db.tf"]["unresolved"] == 1
+    # CRITICAL incident sorts first
+    assert r.json()["incidents"][0]["artifact"] == "app/db.tf"

@@ -136,11 +136,22 @@ class SQLiteStore:
                 ),
             )
 
-    def list_findings(self, limit: int = 50) -> list[dict[str, Any]]:
+    def list_findings(self, limit: int = 50, severity: str | None = None,
+                      path: str | None = None) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
+        clauses, params = [], []
+        if severity:
+            clauses.append("severity = ?")
+            params.append(severity.upper())
+        if path:
+            clauses.append("path = ?")
+            params.append(path)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(limit)
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM findings ORDER BY row_id DESC LIMIT ?", (limit,)
+                f"SELECT * FROM findings{where} ORDER BY row_id DESC LIMIT ?",
+                params,
             ).fetchall()
         return [self._finding_row_to_dict(r) for r in rows]
 
@@ -219,6 +230,38 @@ class SQLiteStore:
             ).fetchall()
         return {r["severity"]: r["n"] for r in rows}
 
+    def incidents(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Group findings by affected artifact into incident summaries.
+
+        An "incident" here is a real derivation: all findings touching the same
+        artifact, with the count, the highest severity seen, and how many are
+        still unresolved. No data is invented — empty when there are no findings.
+        """
+        limit = max(1, min(limit, 200))
+        _rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1,
+                 "INFORMATIONAL": 0}
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT artifact, severity, path, result, timestamp "
+                "FROM findings ORDER BY row_id DESC"
+            ).fetchall()
+        groups: dict[str, dict[str, Any]] = {}
+        for r in rows:
+            art = r["artifact"] or "(unknown)"
+            g = groups.setdefault(art, {
+                "artifact": art, "count": 0, "max_severity": "INFORMATIONAL",
+                "unresolved": 0, "last_seen": r["timestamp"],
+            })
+            g["count"] += 1
+            if _rank.get(r["severity"], 0) > _rank.get(g["max_severity"], 0):
+                g["max_severity"] = r["severity"]
+            res = json.loads(r["result"]) if r["result"] else {}
+            if res.get("auto_resolved") is False and not res.get("approved_by"):
+                g["unresolved"] += 1
+        out = sorted(groups.values(),
+                     key=lambda g: (-_rank.get(g["max_severity"], 0), -g["count"]))
+        return out[:limit]
+
     # ── Audit ─────────────────────────────────────────────────────────
 
     def add_audit(self, record: AuditRecord) -> None:
@@ -237,6 +280,16 @@ class SQLiteStore:
             rows = self._conn.execute(
                 "SELECT finding_id, path, reason, agent, correlation_id, timestamp "
                 "FROM audit ORDER BY row_id DESC LIMIT ?", (limit,)
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def audit_for_finding(self, finding_id: str) -> list[dict[str, Any]]:
+        """Audit entries for one finding, oldest first (a per-finding timeline)."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT finding_id, path, reason, agent, correlation_id, timestamp "
+                "FROM audit WHERE finding_id = ? ORDER BY row_id ASC",
+                (finding_id,),
             ).fetchall()
         return [dict(r) for r in rows]
 

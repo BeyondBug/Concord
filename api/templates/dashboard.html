@@ -237,6 +237,7 @@ body{background:var(--bg);color:var(--text);
     <div class="tabs">
       <button class="tab active" data-view="overview" onclick="switchView('overview')">Overview</button>
       <button class="tab" data-view="findings" onclick="switchView('findings')">Findings</button>
+      <button class="tab" data-view="incidents" onclick="switchView('incidents')">Incidents</button>
       <button class="tab" data-view="security" onclick="switchView('security')">Security</button>
       <button class="tab" data-view="approvals" onclick="switchView('approvals')">Approvals<span class="cnt" id="tab-approvals-cnt"></span></button>
       <button class="tab" data-view="audit" onclick="switchView('audit')">Audit</button>
@@ -311,11 +312,9 @@ body{background:var(--bg);color:var(--text);
       <div class="ov-row">
         <div class="ov-panel">
           <h3>Agents</h3>
-          <div class="ov-line"><span><span class="ov-dot g"></span>Infra</span><span class="mono">pattern scanner · 0.92</span></div>
-          <div class="ov-line"><span><span class="ov-dot g"></span>CI/CD</span><span class="mono">trivy · checkov · 0.88</span></div>
-          <div class="ov-line"><span><span class="ov-dot g"></span>Security</span><span class="mono">source scan · 0.85</span></div>
-          <div class="ov-line"><span><span class="ov-dot d"></span>Kubernetes</span><span class="mono">kagent (MCP) · planned</span></div>
-          <div class="ov-line"><span><span class="ov-dot d"></span>Observability</span><span class="mono">HolmesGPT (MCP) · planned</span></div>
+          <div id="ov-agents">
+            <div class="ov-line"><span class="mono" style="color:var(--muted)">loading…</span></div>
+          </div>
         </div>
         <div class="ov-panel">
           <h3>System</h3>
@@ -408,6 +407,18 @@ body{background:var(--bg);color:var(--text);
         <span class="p-title">Settings — system configuration (read-only)</span>
       </div>
       <div class="tbl-wrap" id="settings-body">
+        <div class="view-empty">Loading…</div>
+      </div>
+    </div>
+  </div>
+  <!-- ── Incidents view ── -->
+  <div class="main" id="view-incidents" data-view="incidents" style="display:none">
+    <div class="f-panel" style="flex:1">
+      <div class="p-hdr">
+        <span class="p-title">Incidents — findings grouped by affected resource</span>
+        <span class="p-live"><span class="live-dot"></span> live</span>
+      </div>
+      <div class="tbl-wrap" id="incidents-body">
         <div class="view-empty">Loading…</div>
       </div>
     </div>
@@ -677,15 +688,51 @@ function switchView(v){
   currentView = v;
   document.querySelectorAll('.tab').forEach(t =>
     t.classList.toggle('active', t.dataset.view === v));
-  ['overview','findings','security','approvals','audit','settings'].forEach(name => {
+  ['overview','findings','incidents','security','approvals','audit','settings'].forEach(name => {
     const el = document.getElementById('view-'+name);
     if (el) el.style.display = (name === v) ? 'flex' : 'none';
   });
   if (v === 'overview') loadOverview();
+  if (v === 'incidents') loadIncidents();
   if (v === 'security') loadSecurity();
   if (v === 'audit') loadAudit();
   if (v === 'approvals') loadApprovals();
   if (v === 'settings') loadSettings();
+}
+
+async function loadIncidents(){
+  const box = document.getElementById('incidents-body');
+  try {
+    const d = await fetch('/findings/incidents').then(r=>r.json());
+    const inc = d.incidents || [];
+    if (!inc.length){
+      box.innerHTML = '<div class="view-empty">No incidents yet. '+
+        'Findings grouped by affected resource will appear here.</div>';
+      return;
+    }
+    const colors = {CRITICAL:'var(--red)',HIGH:'var(--orange)',
+                    MEDIUM:'var(--yellow)',LOW:'var(--green)',
+                    INFORMATIONAL:'var(--muted)'};
+    let rows = '';
+    for (const i of inc){
+      const c = colors[i.max_severity] || 'var(--muted)';
+      const unres = i.unresolved > 0
+        ? `<span style="color:var(--yellow)">${i.unresolved} open</span>`
+        : '<span style="color:var(--green)">resolved</span>';
+      rows += `<tr>`+
+        `<td class="mono">${esc((i.artifact||'').split('/').pop())}</td>`+
+        `<td style="color:${c}">${esc(i.max_severity)}</td>`+
+        `<td>${i.count}</td>`+
+        `<td>${unres}</td>`+
+        `<td class="mono">${esc((i.last_seen||'').slice(0,19))}</td></tr>`;
+    }
+    box.innerHTML = `<table class="dtbl"><thead><tr>`+
+      `<th>Resource</th><th>Max severity</th><th>Findings</th>`+
+      `<th>Status</th><th>Last seen</th>`+
+      `</tr></thead><tbody>${rows}</tbody></table>`;
+  } catch(e){
+    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
+  }
 }
 
 async function loadSettings(){
@@ -754,11 +801,12 @@ async function loadSecurity(){
 
 async function loadOverview(){
   try {
-    const [fr, pr, ar, hr] = await Promise.all([
+    const [fr, pr, ar, hr, ag] = await Promise.all([
       fetch('/findings/').then(r=>r.json()),
       fetch('/events/approvals/pending').then(r=>r.json()),
       fetch('/audit/?limit=100').then(r=>r.json()),
       fetch('/health').then(r=>r.json()),
+      fetch('/agents/').then(r=>r.json()),
     ]);
     const s = fr.stats||{};
     document.getElementById('ov-total').textContent   = s.total||0;
@@ -769,6 +817,19 @@ async function loadOverview(){
     document.getElementById('ov-auth').textContent = hr.auth_enforced ? 'enforced' : 'open (dev)';
     document.getElementById('ov-llm').textContent  = fr.llm_provider||'—';
     document.getElementById('ov-audit-n').textContent = ar.total||0;
+
+    const box = document.getElementById('ov-agents');
+    if (box && ag.agents){
+      box.innerHTML = ag.agents.map(a => {
+        const dot = a.status === 'active' ? 'g' : 'd';
+        const rel = (a.reliability!=null) ? a.reliability.toFixed(2) : '';
+        const tail = a.status === 'active'
+          ? `${esc(a.backing)} · ${rel}`
+          : `${esc(a.backing)} · planned`;
+        return `<div class="ov-line"><span><span class="ov-dot ${dot}"></span>`+
+          `${esc(a.domain)}</span><span class="mono">${tail}</span></div>`;
+      }).join('');
+    }
   } catch(e){ /* offline; leave placeholders */ }
 }
 
@@ -866,6 +927,7 @@ async function refresh() {
     if (currentView === 'audit') loadAudit();
     else if (currentView === 'approvals') loadApprovals();
     else if (currentView === 'security') loadSecurity();
+    else if (currentView === 'incidents') loadIncidents();
     else if (currentView === 'overview') { loadOverview(); refreshApprovalsCount(); }
     else refreshApprovalsCount();
   } catch(e) {

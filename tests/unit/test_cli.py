@@ -127,7 +127,13 @@ def test_unreachable_api_exit_code(monkeypatch):
     assert result.exit_code == 2  # distinct code for "API unreachable"
 
 
-def test_agents_lists_active_and_planned():
+def test_agents_lists_active_and_planned(monkeypatch):
+    payload = {"agents": [
+        {"domain": "infra", "backing": "scan", "reliability": 0.92, "status": "active"},
+        {"domain": "security", "backing": "scan", "reliability": 0.85, "status": "active"},
+        {"domain": "kubernetes", "backing": "kagent", "reliability": 0.82, "status": "planned"},
+    ], "active": 2, "planned": 1}
+    monkeypatch.setattr(cli, "_api_get", lambda *a, **k: payload)
     result = runner.invoke(cli.app, ["agents"])
     assert result.exit_code == 0
     assert "infra" in result.stdout
@@ -158,3 +164,28 @@ def test_reject_command(monkeypatch):
     result = runner.invoke(cli.app, ["reject", "F1"])
     assert result.exit_code == 0
     assert "Rejected" in result.stdout
+
+
+def test_diagnostics_json_healthy(monkeypatch):
+    monkeypatch.setattr(cli, "_api_get",
+                        lambda *a, **k: {"status": "ok", "auth_enforced": False})
+    result = runner.invoke(cli.app, ["diagnostics", "--json"])
+    assert result.exit_code == 0
+    d = json.loads(result.stdout)
+    assert any(c["name"] == "API reachable" and c["ok"] for c in d["checks"])
+
+
+def test_diagnostics_unreachable_exit_code(monkeypatch):
+    import httpx
+
+    def _boom(*a, **k):
+        raise httpx.ConnectError("refused")
+    monkeypatch.setattr(cli, "_api_get", _boom)
+    result = runner.invoke(cli.app, ["diagnostics"])
+    assert result.exit_code == 2
+
+
+def test_completion_help():
+    result = runner.invoke(cli.app, ["completion"])
+    assert result.exit_code == 0
+    assert "install-completion" in result.stdout

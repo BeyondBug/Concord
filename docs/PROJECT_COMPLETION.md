@@ -65,6 +65,53 @@ LLM self-report — this invariant is preserved and tested.
 
 ## 3. What this session actually changed (verified)
 
+### Slice 22 — Incidents view + finding detail (this session)
+
+Two larger features, both real derivations from stored data (no fabrication):
+
+- **Incidents.** `GET /findings/incidents` groups findings by affected artifact
+  into incident summaries (count, highest severity, unresolved count, last
+  seen), sorted by severity. New dashboard **Incidents** tab (7th view). This is
+  the honest version of the task-doc "Incidents" feature — a real grouping of
+  related findings, empty when there are none.
+- **Finding detail.** `GET /findings/{id}/detail` joins a finding with its
+  **audit timeline** (via new `audit_for_finding()` on both stores) plus the
+  agent scores and resolution state — so a single finding's full history is
+  traceable.
+
+Store methods added to both SQLite and PostgreSQL backends.
+
+Tests: detail (with timeline) + 404, incidents grouping/sorting
+(`test_observability.py`). **142 passing.** Verified live: 3 findings on one
+artifact → 1 incident (CRITICAL, 2 unresolved); detail returns a 3-entry
+timeline.
+
+Also: the earlier `/agents/` 404 was a stale-paste of `api/main.py` on the
+user's side; confirmed the packaged files register the router and pass.
+
+---
+
+
+### Slice 21 — agents endpoint + findings filtering (this session)
+
+- **`GET /agents/`** — a single backend source of truth for agent metadata
+  (domain, reliability, backing, status). Status is derived honestly: active
+  only if `analyze()` is implemented; kubernetes/observability report "planned".
+  The dashboard Overview panel and the CLI `agents` command now **fetch from
+  this endpoint** instead of hardcoding the list — so all three surfaces stay
+  consistent automatically.
+- **Findings filtering** — `GET /findings/?severity=&path=` (both stores;
+  parameterized SQL). CLI `findings --severity/--path` wired through.
+- Fixed the CLI `agents` test to mock the new endpoint.
+
+Tests: agents endpoint, severity filter, path filter, CLI agents
+(`test_observability.py`, `test_cli.py`). **139 passing.** Verified live:
+`/agents/` → 3 active / 2 planned; `?severity=HIGH` and `?path=fast_path`
+filter correctly.
+
+---
+
+
 ### Slice 20 — CLI diagnostics/completion, compose healthcheck, CHANGELOG (this session)
 
 - **CLI `diagnostics`** — checks API reachability, auth posture, and local
@@ -450,7 +497,7 @@ the kubernetes/observability MCP connectors are wired in.
 | Check | Command | Result |
 |-------|---------|--------|
 | Lint | `ruff check .` | PASS (clean) |
-| Unit + integration tests | `pytest tests/` | 136 passed (1 slow) |
+| Unit + integration tests | `pytest tests/` | 142 passed (1 slow) |
 | API smoke | FastAPI `TestClient` demo → findings → audit | PASS (data persisted + readable) |
 | Orchestrator run | security agent scores 0.85 and enters arbitration | PASS (verified in logs) |
 | No stray artifacts | `ls *.db` | none committed |
