@@ -48,10 +48,12 @@ async def approve_finding(finding_id: str, agent: str):
     result = f.get("result", {})
     pr_comment = result.get("pr_comment", "")
 
-    # Guard: only allow approving an agent that actually participated, when we
-    # know the candidates. Prevents recording an approval for a bogus agent.
-    candidates = result.get("agents")
-    if isinstance(candidates, dict) and agent not in candidates:
+    if (f.get("path") != "ai_path"
+            or result.get("auto_resolved") is not False
+            or result.get("approved_by")
+            or result.get("rejected")
+            or result.get("expired")):
+        raise HTTPException(status_code=409, detail="Finding is not awaiting approval.")
         raise HTTPException(
             status_code=400,
             detail=f"Agent '{agent}' is not a candidate for this finding. "
