@@ -65,6 +65,29 @@ LLM self-report — this invariant is preserved and tested.
 
 ## 3. What this session actually changed (verified)
 
+### Slices 13–15 — approval lifecycle, Overview view, docs (this session)
+
+**Slice 13 — approval reject/expire.** `/events/findings/{id}/reject` and
+`/events/approvals/expire` — both durable and audited; rejected/expired findings
+leave the pending queue. Wired into the dashboard (reject button) and CLI
+(`reject`). Tests: `test_approval_lifecycle.py` (6). Verified live.
+
+**Slice 14 — dashboard Overview.** New default landing view with live stats
+(findings totals, pending approvals, audit count) and system/agent status, all
+from real endpoints (`/findings`, `/events/approvals/pending`, `/audit`,
+`/health`). No mock data. HTML structurally validated; data sources smoke-tested.
+
+**Slice 15 — documentation.** Rewrote `README.md` (9 → ~280 lines) with an
+honest feature set, Mermaid architecture diagram, quickstart, config table, CLI
+and API reference, deployment, and structure — planned agents clearly labeled.
+Added `docs/ARCHITECTURE.md` with component + sequence diagrams. Docs reflect
+the implemented system; nothing overclaimed.
+
+**Total: 127 passing tests.**
+
+---
+
+
 ### Slice 12 — dashboard Approvals + Audit views + startup fix (this session)
 
 **Latency fix (from a real observation):** with `POSTGRES_URL` set but no
@@ -344,7 +367,7 @@ the kubernetes/observability MCP connectors are wired in.
 | Check | Command | Result |
 |-------|---------|--------|
 | Lint | `ruff check .` | PASS (clean) |
-| Unit + integration tests | `pytest tests/` | 121 passed (1 slow) |
+| Unit + integration tests | `pytest tests/` | 127 passed (1 slow) |
 | API smoke | FastAPI `TestClient` demo → findings → audit | PASS (data persisted + readable) |
 | Orchestrator run | security agent scores 0.85 and enters arbitration | PASS (verified in logs) |
 | No stray artifacts | `ls *.db` | none committed |

@@ -247,6 +247,24 @@ def approve(
 
 
 @app.command()
+def reject(
+    finding_id: str = typer.Argument(..., help="Finding ID to reject."),
+    reason: str = typer.Option("rejected by reviewer", "--reason", "-r"),
+    json: bool = typer.Option(False, "--json", help="Machine-readable output."),
+):
+    """Reject a pending finding (records a durable, audited decision)."""
+    try:
+        d = _api_post(f"/events/findings/{finding_id}/reject",
+                      params={"reason": reason})
+    except Exception as e:  # noqa: BLE001
+        _die_unreachable(e)
+    if _want_json(json):
+        _emit_json(d)
+        return
+    con.print(f"\n  [red]✕ Rejected[/red] {finding_id}  [dim]({reason})[/dim]")
+
+
+@app.command()
 def invoke(
     severity: str = typer.Option("CRITICAL", "--severity", "-s",
                                  help="CRITICAL | HIGH | MEDIUM | LOW"),

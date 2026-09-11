@@ -191,6 +191,29 @@ body{background:var(--bg);color:var(--text);
   color:var(--brand)}
 .view-empty{display:flex;flex-direction:column;align-items:center;
   justify-content:center;height:100%;color:var(--muted);gap:8px;padding:40px}
+
+/* ── Overview ── */
+.ov-wrap{flex:1;overflow:auto;padding:18px}
+.ov-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+  gap:12px;margin-bottom:16px}
+.ov-card{background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:16px}
+.ov-card .k{color:var(--muted);font-size:11px;text-transform:uppercase;
+  letter-spacing:.04em}
+.ov-card .v{font-size:28px;font-weight:700;color:#fff;margin-top:6px}
+.ov-card .v.sm{font-size:15px;font-weight:600}
+.ov-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:760px){.ov-row{grid-template-columns:1fr}}
+.ov-panel{background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;padding:14px 16px}
+.ov-panel h3{font-size:12px;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.04em;margin-bottom:10px}
+.ov-line{display:flex;justify-content:space-between;align-items:center;
+  padding:6px 0;border-bottom:1px solid var(--surface2);font-size:12px}
+.ov-line:last-child{border-bottom:none}
+.ov-dot{display:inline-block;width:8px;height:8px;border-radius:50%;
+  margin-right:7px}
+.ov-dot.g{background:var(--green)}.ov-dot.d{background:var(--muted);opacity:.4}
 </style>
 </head>
 <body>
@@ -201,7 +224,8 @@ body{background:var(--bg);color:var(--text);
   <div class="hdr-mid">
     <span class="hdr-desc">AI DevSecOps Orchestration Platform</span>
     <div class="tabs" style="margin-left:8px">
-      <button class="tab active" data-view="findings" onclick="switchView('findings')">Findings</button>
+      <button class="tab active" data-view="overview" onclick="switchView('overview')">Overview</button>
+      <button class="tab" data-view="findings" onclick="switchView('findings')">Findings</button>
       <button class="tab" data-view="approvals" onclick="switchView('approvals')">Approvals<span class="cnt" id="tab-approvals-cnt"></span></button>
       <button class="tab" data-view="audit" onclick="switchView('audit')">Audit</button>
     </div>
@@ -261,8 +285,37 @@ body{background:var(--bg);color:var(--text);
     </div>
   </aside>
 
+  <!-- ── Overview view ── -->
+  <div class="main" id="view-overview" data-view="overview" style="flex:1">
+    <div class="ov-wrap">
+      <div class="ov-grid" id="ov-stats">
+        <div class="ov-card"><div class="k">Total findings</div><div class="v" id="ov-total">0</div></div>
+        <div class="ov-card"><div class="k">Fast path</div><div class="v" id="ov-fast">0</div></div>
+        <div class="ov-card"><div class="k">AI path</div><div class="v" id="ov-ai">0</div></div>
+        <div class="ov-card"><div class="k">Awaiting approval</div><div class="v" id="ov-pending">0</div></div>
+      </div>
+      <div class="ov-row">
+        <div class="ov-panel">
+          <h3>Agents</h3>
+          <div class="ov-line"><span><span class="ov-dot g"></span>Infra</span><span class="mono">pattern scanner · 0.92</span></div>
+          <div class="ov-line"><span><span class="ov-dot g"></span>CI/CD</span><span class="mono">trivy · checkov · 0.88</span></div>
+          <div class="ov-line"><span><span class="ov-dot g"></span>Security</span><span class="mono">source scan · 0.85</span></div>
+          <div class="ov-line"><span><span class="ov-dot d"></span>Kubernetes</span><span class="mono">kagent (MCP) · planned</span></div>
+          <div class="ov-line"><span><span class="ov-dot d"></span>Observability</span><span class="mono">HolmesGPT (MCP) · planned</span></div>
+        </div>
+        <div class="ov-panel">
+          <h3>System</h3>
+          <div class="ov-line"><span>API</span><span id="ov-api" class="mono">—</span></div>
+          <div class="ov-line"><span>Auth</span><span id="ov-auth" class="mono">—</span></div>
+          <div class="ov-line"><span>LLM provider</span><span id="ov-llm" class="mono">—</span></div>
+          <div class="ov-line"><span>Recent audit events</span><span id="ov-audit-n" class="mono">0</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Main ── -->
-  <div class="main" id="view-findings" data-view="findings">
+  <div class="main" id="view-findings" data-view="findings" style="display:none">
 
     <!-- Findings list -->
     <div class="f-panel">
@@ -564,20 +617,56 @@ async function approveFinding(findingId, agent) {
   }
 }
 
+async function rejectFinding(findingId) {
+  const btns = document.querySelectorAll('.approve-btn');
+  btns.forEach(b => b.disabled = true);
+  try {
+    const r = await fetch(`/events/findings/${findingId}/reject`, {method:'POST'});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    toast('✕ Finding rejected', 'ok', 3000);
+    loadApprovals();
+    refresh();
+  } catch(e) {
+    toast('Reject failed: ' + e.message, 'err', 4000);
+    btns.forEach(b => b.disabled = false);
+  }
+}
+
 // ── View switching + new data views ────────────────────────────
 
-let currentView = 'findings';
+let currentView = 'overview';
 
 function switchView(v){
   currentView = v;
   document.querySelectorAll('.tab').forEach(t =>
     t.classList.toggle('active', t.dataset.view === v));
-  ['findings','approvals','audit'].forEach(name => {
+  ['overview','findings','approvals','audit'].forEach(name => {
     const el = document.getElementById('view-'+name);
     if (el) el.style.display = (name === v) ? 'flex' : 'none';
   });
+  if (v === 'overview') loadOverview();
   if (v === 'audit') loadAudit();
   if (v === 'approvals') loadApprovals();
+}
+
+async function loadOverview(){
+  try {
+    const [fr, pr, ar, hr] = await Promise.all([
+      fetch('/findings/').then(r=>r.json()),
+      fetch('/events/approvals/pending').then(r=>r.json()),
+      fetch('/audit/?limit=100').then(r=>r.json()),
+      fetch('/health').then(r=>r.json()),
+    ]);
+    const s = fr.stats||{};
+    document.getElementById('ov-total').textContent   = s.total||0;
+    document.getElementById('ov-fast').textContent    = s.fast||0;
+    document.getElementById('ov-ai').textContent      = s.ai||0;
+    document.getElementById('ov-pending').textContent = pr.total||0;
+    document.getElementById('ov-api').textContent  = hr.status||'—';
+    document.getElementById('ov-auth').textContent = hr.auth_enforced ? 'enforced' : 'open (dev)';
+    document.getElementById('ov-llm').textContent  = fr.llm_provider||'—';
+    document.getElementById('ov-audit-n').textContent = ar.total||0;
+  } catch(e){ /* offline; leave placeholders */ }
 }
 
 function esc(s){
@@ -604,7 +693,10 @@ async function loadApprovals(){
       const agents = Object.keys((f.result||{}).agents||{});
       const btns = agents.map(a =>
         `<button class="approve-btn" onclick="approveFinding('${esc(f.id)}','${esc(a)}')">`+
-        `✓ ${esc(a)}</button>`).join(' ');
+        `✓ ${esc(a)}</button>`).join(' ') +
+        ` <button class="approve-btn" style="background:var(--surface2);`+
+        `border:1px solid var(--red);color:var(--red)" `+
+        `onclick="rejectFinding('${esc(f.id)}')">✕ reject</button>`;
       rows += `<tr><td class="mono">${esc(f.id)}</td>`+
         `<td>${esc(f.severity)}</td>`+
         `<td class="mono">${esc((f.artifact||'').split('/').pop())}</td>`+
@@ -670,6 +762,7 @@ async function refresh() {
     // Keep the approvals count badge and the active auxiliary view live.
     if (currentView === 'audit') loadAudit();
     else if (currentView === 'approvals') loadApprovals();
+    else if (currentView === 'overview') { loadOverview(); refreshApprovalsCount(); }
     else refreshApprovalsCount();
   } catch(e) {
     document.getElementById('status-pill').textContent = '● Offline';
@@ -687,6 +780,7 @@ async function refreshApprovalsCount(){
 
 setInterval(refresh, 2000);
 refresh();
+loadOverview();
 </script>
 </body>
 </html>

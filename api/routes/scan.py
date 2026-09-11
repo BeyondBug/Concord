@@ -116,6 +116,79 @@ async def list_pending_approvals(limit: int = 100):
     return {"pending": pending, "total": len(pending)}
 
 
+@router.post("/findings/{finding_id}/reject")
+async def reject_finding(finding_id: str, reason: str = "rejected by reviewer"):
+    """Reject a pending finding: mark it resolved-as-rejected and audit it.
+
+    A rejection is a human decision like an approval — it must be durable and
+    auditable. The finding leaves the pending queue without selecting a winner.
+    """
+    from api.routes.findings import store
+    from core.persistence import AuditRecord, get_store
+
+    f = store.get(finding_id)
+    if not f:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    result = f.get("result", {})
+    result["rejected"]       = True
+    result["rejected_at"]    = datetime.now(UTC).isoformat()
+    result["reject_reason"]  = reason
+    result["auto_resolved"]  = True   # leaves the pending queue
+    result["needs_approval"] = False
+    persisted = get_store().update_finding_result(finding_id, result)
+
+    get_store().add_audit(AuditRecord(
+        finding_id=finding_id, path="ai_path",
+        reason=f"human_rejected:{reason}"[:200], agent=None,
+    ))
+    logger.info("[APPROVAL]  finding=%s REJECTED persisted=%s",
+                finding_id, persisted)
+    return {"status": "rejected", "finding_id": finding_id,
+            "persisted": persisted, "reason": reason}
+
+
+@router.post("/approvals/expire")
+async def expire_stale_approvals(max_age_hours: float = 24.0):
+    """Expire pending approvals older than ``max_age_hours``.
+
+    Findings that sit unresolved past the window are auto-expired (a fail-safe:
+    stale human-in-the-loop items should not block indefinitely). Each expiry is
+    audited. Intended to be called by a scheduler; also usable manually.
+    """
+    from datetime import timedelta
+
+    from core.persistence import AuditRecord, get_store
+
+    store_ = get_store()
+    cutoff = datetime.now(UTC) - timedelta(hours=max_age_hours)
+    expired = []
+    for f in store_.list_pending_approvals(limit=500):
+        ts = f.get("timestamp", "")
+        try:
+            created = datetime.fromisoformat(ts)
+        except ValueError:
+            continue
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=UTC)
+        if created >= cutoff:
+            continue
+        result = f.get("result", {})
+        result["expired"]        = True
+        result["expired_at"]     = datetime.now(UTC).isoformat()
+        result["auto_resolved"]  = True
+        result["needs_approval"] = False
+        store_.update_finding_result(f["id"], result)
+        store_.add_audit(AuditRecord(
+            finding_id=f["id"], path="ai_path",
+            reason=f"approval_expired:age>{max_age_hours}h", agent=None,
+        ))
+        expired.append(f["id"])
+
+    logger.info("[APPROVAL]  expired %d stale approval(s)", len(expired))
+    return {"status": "ok", "expired": expired, "count": len(expired)}
+
+
 async def _run_scan():
     """Background task: clone/pull CRMS, scan, save to findings store."""
     import subprocess
