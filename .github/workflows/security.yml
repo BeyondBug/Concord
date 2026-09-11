@@ -24,7 +24,7 @@ jobs:
 
       - name: Trivy filesystem scan
         # Pinned to a released tag rather than @master for supply-chain safety.
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: .
@@ -49,4 +49,5 @@ jobs:
           python-version: "3.11"
       - name: Audit Python dependencies
         run: |
+          pip install pip-audit
           pip-audit -r requirements/base.txt
