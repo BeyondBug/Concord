@@ -25,9 +25,14 @@ _REQUEST_ID_HEADER = "X-Request-ID"
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        request_id = request.headers.get(_REQUEST_ID_HEADER) or uuid.uuid4().hex[:16]
-        request.state.request_id = request_id
-        token = set_correlation_id(request_id)
+        raw_request_id = request.headers.get(_REQUEST_ID_HEADER, "")
+        request_id = (
+            raw_request_id
+            if raw_request_id and len(raw_request_id) <= 128
+            and raw_request_id.isascii()
+            and all(ch.isalnum() or ch in "._:-" for ch in raw_request_id)
+            else uuid.uuid4().hex[:16]
+        )
 
         start = time.perf_counter()
         try:
