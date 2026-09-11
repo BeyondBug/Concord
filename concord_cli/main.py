@@ -264,6 +264,14 @@ def reject(
     try:
         d = _api_post(f"/events/findings/{finding_id}/reject",
                       params={"reason": reason})
+    except httpx.HTTPStatusError as e:
+        detail = ""
+        try:
+            detail = e.response.json().get("detail", "")
+        except Exception:  # noqa: BLE001
+            pass
+        err.print(f"[red]Rejection failed ({e.response.status_code}): {detail}[/red]")
+        raise typer.Exit(1)
     except Exception as e:  # noqa: BLE001
         _die_unreachable(e)
     if _want_json(json):
