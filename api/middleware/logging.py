@@ -44,14 +44,15 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 request_id, request.method, request.url.path, duration_ms,
             )
             raise
+        else:
+            duration_ms = (time.perf_counter() - start) * 1000
+            logger.info(
+                "rid=%s %s %s -> %s (%.1fms)",
+                request_id, request.method, request.url.path,
+                response.status_code, duration_ms,
+            )
+            response.headers[_REQUEST_ID_HEADER] = request_id
+            return response
         finally:
             reset_correlation_id(token)
-
-        duration_ms = (time.perf_counter() - start) * 1000
-        logger.info(
-            "rid=%s %s %s -> %s (%.1fms)",
-            request_id, request.method, request.url.path,
-            response.status_code, duration_ms,
-        )
-        response.headers[_REQUEST_ID_HEADER] = request_id
         return response
