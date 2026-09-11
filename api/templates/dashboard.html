@@ -240,6 +240,7 @@ body{background:var(--bg);color:var(--text);
       <button class="tab" data-view="security" onclick="switchView('security')">Security</button>
       <button class="tab" data-view="approvals" onclick="switchView('approvals')">Approvals<span class="cnt" id="tab-approvals-cnt"></span></button>
       <button class="tab" data-view="audit" onclick="switchView('audit')">Audit</button>
+      <button class="tab" data-view="settings" onclick="switchView('settings')">Settings</button>
     </div>
     <span class="hdr-desc" style="margin-left:4px">AI DevSecOps Orchestration Platform</span>
     <span id="scan-status-text" style="font-size:11px;color:var(--muted)"></span>
@@ -396,6 +397,17 @@ body{background:var(--bg);color:var(--text);
         <span class="p-live"><span class="live-dot"></span> live</span>
       </div>
       <div class="tbl-wrap" id="security-body">
+        <div class="view-empty">Loading…</div>
+      </div>
+    </div>
+  </div>
+  <!-- ── Settings view ── -->
+  <div class="main" id="view-settings" data-view="settings" style="display:none">
+    <div class="f-panel" style="flex:1">
+      <div class="p-hdr">
+        <span class="p-title">Settings — system configuration (read-only)</span>
+      </div>
+      <div class="tbl-wrap" id="settings-body">
         <div class="view-empty">Loading…</div>
       </div>
     </div>
@@ -665,7 +677,7 @@ function switchView(v){
   currentView = v;
   document.querySelectorAll('.tab').forEach(t =>
     t.classList.toggle('active', t.dataset.view === v));
-  ['overview','findings','security','approvals','audit'].forEach(name => {
+  ['overview','findings','security','approvals','audit','settings'].forEach(name => {
     const el = document.getElementById('view-'+name);
     if (el) el.style.display = (name === v) ? 'flex' : 'none';
   });
@@ -673,6 +685,38 @@ function switchView(v){
   if (v === 'security') loadSecurity();
   if (v === 'audit') loadAudit();
   if (v === 'approvals') loadApprovals();
+  if (v === 'settings') loadSettings();
+}
+
+async function loadSettings(){
+  const box = document.getElementById('settings-body');
+  try {
+    const [h, v, f] = await Promise.all([
+      fetch('/health').then(r=>r.json()),
+      fetch('/version').then(r=>r.json()),
+      fetch('/findings/').then(r=>r.json()),
+    ]);
+    const rows = [
+      ['Service', v.service||'concord'],
+      ['Version', v.version||'—'],
+      ['API status', h.status||'—'],
+      ['Authentication', h.auth_enforced ? 'enforced (API key set)' : 'open dev mode (no key)'],
+      ['LLM provider', f.llm_provider||'—'],
+    ];
+    let html = '<div style="max-width:560px"><table class="dtbl"><tbody>';
+    for (const [k,val] of rows){
+      html += `<tr><td style="color:var(--muted);width:180px">${esc(k)}</td>`+
+        `<td class="mono">${esc(val)}</td></tr>`;
+    }
+    html += '</tbody></table>'+
+      '<div style="margin-top:14px;color:var(--muted);font-size:11px;line-height:1.6">'+
+      'These values are read from the live API. Configuration is managed via '+
+      'environment variables (see <span class="mono">.env.example</span>); '+
+      'secrets are never displayed here.</div></div>';
+    box.innerHTML = html;
+  } catch(e){
+    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
+  }
 }
 
 async function loadSecurity(){

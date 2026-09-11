@@ -265,6 +265,35 @@ def reject(
 
 
 @app.command()
+def stats(json: bool = typer.Option(False, "--json", help="Machine-readable output.")):
+    """One-line summary: findings, pending approvals, audit events."""
+    try:
+        f = _api_get("/findings/")
+        p = _api_get("/events/approvals/pending")
+        a = _api_get("/audit/", params={"limit": 1})
+    except Exception as e:  # noqa: BLE001
+        _die_unreachable(e)
+    s = f.get("stats", {})
+    summary = {
+        "total": s.get("total", 0),
+        "fast": s.get("fast", 0),
+        "ai": s.get("ai", 0),
+        "tiebreaks": s.get("tiebreaks", 0),
+        "pending_approvals": p.get("total", 0),
+        "audit_events": a.get("total", 0),
+    }
+    if _want_json(json):
+        _emit_json(summary)
+        return
+    con.print(
+        f"\n  Findings [bold]{summary['total']}[/bold]  "
+        f"(fast [green]{summary['fast']}[/green] · ai [cyan]{summary['ai']}[/cyan])   "
+        f"Pending [yellow]{summary['pending_approvals']}[/yellow]   "
+        f"Audit [dim]{summary['audit_events']}[/dim]\n"
+    )
+
+
+@app.command()
 def invoke(
     severity: str = typer.Option("CRITICAL", "--severity", "-s",
                                  help="CRITICAL | HIGH | MEDIUM | LOW"),

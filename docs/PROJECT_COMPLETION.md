@@ -65,6 +65,43 @@ LLM self-report — this invariant is preserved and tested.
 
 ## 3. What this session actually changed (verified)
 
+### Slice 20 — CLI diagnostics/completion, compose healthcheck, CHANGELOG (this session)
+
+- **CLI `diagnostics`** — checks API reachability, auth posture, and local
+  config; prints actionable guidance; exit code 2 when the API is down.
+  Verified live (both down → exit 2 and healthy → exit 0).
+- **CLI `completion`** — shows how to enable Typer shell completion
+  (bash/zsh/fish/PowerShell).
+- **CLI `stats`** already added last slice; CLI now has 12 commands.
+- **docker-compose api healthcheck** — the api service now declares a
+  `/health` healthcheck (the Dockerfile already had one; compose now matches),
+  completing the `depends_on: service_healthy` chain. YAML validated.
+- **CHANGELOG.md** created (Keep a Changelog format) reflecting all slices.
+
+Tests: diagnostics (healthy + unreachable) + completion (`test_cli.py`, now 17).
+**136 passing.**
+
+---
+
+
+### Slice 19 — Settings view, CLI stats, threat model doc (this session)
+
+- **Settings dashboard view.** New read-only tab showing service/version, API
+  status, auth posture, and LLM provider — all from the live `/health`,
+  `/version`, and `/findings` endpoints. Secrets are never displayed;
+  configuration is env-driven. Dashboard now has **6 views**.
+- **CLI `stats` command.** One-line summary (findings / fast / ai / tiebreaks /
+  pending approvals / audit events) with `--json`. Verified live.
+- **`docs/threat-model.md` created.** `SECURITY.md` and the sanitizer docstring
+  both referenced it but it didn't exist — now a real threat model with trust
+  boundaries, a threat/control table (T1–T9), and residual risk. Fixed the
+  outdated "Phase 3" label in `SECURITY.md` (sanitization is done).
+
+Tests: CLI `stats` + `reject` (`test_cli.py`, now 14). **133 passing.**
+
+---
+
+
 ### Slice 18 — dashboard UI fixes + polish (this session)
 
 Fixes from a real screenshot review:
@@ -413,7 +450,7 @@ the kubernetes/observability MCP connectors are wired in.
 | Check | Command | Result |
 |-------|---------|--------|
 | Lint | `ruff check .` | PASS (clean) |
-| Unit + integration tests | `pytest tests/` | 131 passed (1 slow) |
+| Unit + integration tests | `pytest tests/` | 136 passed (1 slow) |
 | API smoke | FastAPI `TestClient` demo → findings → audit | PASS (data persisted + readable) |
 | Orchestrator run | security agent scores 0.85 and enters arbitration | PASS (verified in logs) |
 | No stray artifacts | `ls *.db` | none committed |

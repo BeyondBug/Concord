@@ -132,3 +132,29 @@ def test_agents_lists_active_and_planned():
     assert result.exit_code == 0
     assert "infra" in result.stdout
     assert "security" in result.stdout
+
+
+def test_stats_json(monkeypatch):
+    def _get(path, params=None):
+        if path == "/findings/":
+            return {"stats": {"total": 5, "fast": 3, "ai": 2, "tiebreaks": 1}}
+        if path.startswith("/events/approvals"):
+            return {"total": 2}
+        if path == "/audit/":
+            return {"total": 9}
+        return {}
+    monkeypatch.setattr(cli, "_api_get", _get)
+    result = runner.invoke(cli.app, ["stats", "--json"])
+    assert result.exit_code == 0
+    d = json.loads(result.stdout)
+    assert d["total"] == 5
+    assert d["pending_approvals"] == 2
+    assert d["audit_events"] == 9
+
+
+def test_reject_command(monkeypatch):
+    monkeypatch.setattr(cli, "_api_post",
+                        lambda *a, **k: {"status": "rejected", "finding_id": "F1"})
+    result = runner.invoke(cli.app, ["reject", "F1"])
+    assert result.exit_code == 0
+    assert "Rejected" in result.stdout
