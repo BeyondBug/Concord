@@ -33,7 +33,7 @@ services:
     ports: ["127.0.0.1:8000:8000"]
     env_file: .env
     environment:
-      CONCORD_DB_PATH: ${CONCORD_DB_PATH:-/data/concord.db}
+      CONCORD_DB_PATH: /data/concord.db
     depends_on:
       postgres:
         condition: service_healthy
