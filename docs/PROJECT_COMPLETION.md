@@ -519,7 +519,7 @@ the kubernetes/observability MCP connectors are wired in.
 **P2 (reliability / ops)**
 - ~~PostgreSQL backend behind the same `get_store()` API~~ — **DONE** (slice 9, live-DB-unverified).
 - ~~Harden Dockerfile (non-root, multi-stage), Helm (securityContext, limits), Terraform~~ — Docker + Helm **DONE** (slice 8, build-unverified); Terraform still pending.
-- Structured logging with correlation IDs.
+- ~~Structured logging with correlation IDs~~ — **DONE**.
 
 **P3 (product polish)**
 - Real web dashboard (framework TBD) beyond the single static HTML page.
