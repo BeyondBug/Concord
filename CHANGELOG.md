@@ -22,7 +22,7 @@ semantic versioning once it reaches a tagged release.
 - **Approval lifecycle**: approve, reject, and expire flows — all durable and
   audited — plus a pending-approvals queue.
 - **Structured (JSON) logging** mode.
-- **Web dashboard** with six live views: Overview, Findings, Security,
+- **Web dashboard** with seven live views: Overview, Findings, Incidents, Security,
   Approvals, Audit, Settings (all read from the live API; no mock data).
 - **CLI** with human and `--json` output: `health`, `findings`, `audit`,
   `approvals`, `approve`, `reject`, `stats`, `diagnostics`, `invoke`, `agents`,
