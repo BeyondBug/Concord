@@ -4,7 +4,7 @@ Triggers a real CRMS scan and handles PR approval workflow.
 """
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
@@ -21,7 +21,7 @@ async def scan_crms_endpoint(background_tasks: BackgroundTasks):
     if _scan_state.get("status") == "scanning":
         return {"status": "already_scanning", "message": "Scan in progress"}
     _scan_state["status"]   = "scanning"
-    _scan_state["started"]  = datetime.utcnow().isoformat()
+    _scan_state["started"]  = datetime.now(UTC).isoformat()
     _scan_state["error"]    = None
     background_tasks.add_task(_run_scan)
     return {"status": "scanning", "message": "CRMS scan started"}
@@ -40,6 +40,7 @@ async def approve_finding(finding_id: str, agent: str):
     Creates a GitHub issue on crms-devops/crms if GITHUB_TOKEN is set.
     """
     from api.routes.findings import store
+    from core.persistence import AuditRecord, get_store
     f = store.get(finding_id)
     if not f:
         raise HTTPException(status_code=404, detail="Finding not found")
@@ -47,10 +48,32 @@ async def approve_finding(finding_id: str, agent: str):
     result = f.get("result", {})
     pr_comment = result.get("pr_comment", "")
 
-    # Mark as resolved in store
+    # Guard: only allow approving an agent that actually participated, when we
+    # know the candidates. Prevents recording an approval for a bogus agent.
+    candidates = result.get("agents")
+    if isinstance(candidates, dict) and agent not in candidates:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent '{agent}' is not a candidate for this finding. "
+                   f"Choose one of: {', '.join(sorted(candidates))}.",
+        )
+
+    # Durably record the human resolution (previously this mutated a copy that
+    # never reached storage).
     result["approved_by"]   = agent
-    result["approved_at"]   = datetime.utcnow().isoformat()
+    result["approved_at"]   = datetime.now(UTC).isoformat()
     result["auto_resolved"] = True   # now resolved by human
+    result["agent"]         = agent
+    result["needs_approval"] = False
+    persisted = get_store().update_finding_result(finding_id, result)
+
+    # Every decision — including a human approval — must be auditable.
+    get_store().add_audit(AuditRecord(
+        finding_id=finding_id, path="ai_path",
+        reason=f"human_approved:{agent}", agent=agent,
+    ))
+    logger.info("[APPROVAL]  finding=%s approved agent=%s persisted=%s",
+                finding_id, agent, persisted)
 
     github_url = None
     token = os.getenv("GITHUB_TOKEN", "")
@@ -77,11 +100,20 @@ async def approve_finding(finding_id: str, agent: str):
         "status":      "approved",
         "finding_id":  finding_id,
         "agent":       agent,
+        "persisted":   persisted,
         "github_url":  github_url,
         "message":     (f"GitHub issue created: {github_url}"
                         if github_url else
                         "Approved (set GITHUB_TOKEN in .env to create GitHub issue)"),
     }
+
+
+@router.get("/approvals/pending")
+async def list_pending_approvals(limit: int = 100):
+    """List AI-path findings awaiting a human decision (tiebreaks)."""
+    from core.persistence import get_store
+    pending = get_store().list_pending_approvals(limit=limit)
+    return {"pending": pending, "total": len(pending)}
 
 
 async def _run_scan():
@@ -128,7 +160,7 @@ async def _run_scan():
         sev   = ("CRITICAL" if total > 10 else
                  "HIGH"     if total > 3  else
                  "MEDIUM"   if total > 0  else "LOW")
-        fid   = f"CRMS-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}"
+        fid   = f"CRMS-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}"
 
         _scan_state["message"] = f"Scanned — {total} violations found"
 

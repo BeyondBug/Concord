@@ -2,7 +2,7 @@
 tests/unit/test_orchestrator.py
 Orchestrator integration tests (uses agent stubs — no external deps).
 """
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -19,7 +19,7 @@ def make_finding(severity="HIGH", finding_id="test-001"):
         title="Test finding",
         description="Unit test",
         raw={},
-        timestamp=datetime.utcnow(),
+        timestamp=datetime.now(UTC),
         repository="BeyondBug/CRMS",
     )
 

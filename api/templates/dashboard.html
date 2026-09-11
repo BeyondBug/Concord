@@ -160,6 +160,37 @@ body{background:var(--bg);color:var(--text);
 .toast.ok{background:var(--brand);color:#fff}
 .toast.err{background:#EF4444;color:#fff}
 .toast.show{opacity:1}
+
+/* ── View tabs ── */
+.tabs{display:flex;gap:2px;align-items:center}
+.tab{background:none;border:none;color:var(--muted);font-size:12px;
+  padding:6px 12px;border-radius:5px;cursor:pointer;font-family:inherit;
+  transition:background .12s,color .12s}
+.tab:hover{color:var(--text);background:var(--surface2)}
+.tab.active{color:#fff;background:var(--brand-dim);
+  box-shadow:inset 0 0 0 1px var(--brand)}
+.tab .cnt{color:var(--muted);font-size:10px;margin-left:5px}
+.view{display:none;flex:1;min-height:0}
+.view.active{display:flex}
+
+/* ── Data tables (audit / approvals) ── */
+.tbl-wrap{flex:1;overflow:auto;padding:14px 18px}
+.dtbl{width:100%;border-collapse:collapse;font-size:12px}
+.dtbl th{text-align:left;color:var(--muted);font-weight:600;
+  padding:7px 10px;border-bottom:1px solid var(--border);
+  position:sticky;top:0;background:var(--bg);white-space:nowrap}
+.dtbl td{padding:7px 10px;border-bottom:1px solid var(--surface2);
+  vertical-align:top}
+.dtbl tr:hover td{background:var(--surface)}
+.mono{font-family:'SF Mono',Menlo,Consolas,monospace;font-size:11px;
+  color:var(--muted)}
+.chip{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;
+  background:var(--surface2);border:1px solid var(--border)}
+.chip.ai{color:var(--blue)}.chip.fast{color:var(--green)}
+.rid{font-family:'SF Mono',Menlo,Consolas,monospace;font-size:10px;
+  color:var(--brand)}
+.view-empty{display:flex;flex-direction:column;align-items:center;
+  justify-content:center;height:100%;color:var(--muted);gap:8px;padding:40px}
 </style>
 </head>
 <body>
@@ -169,6 +200,11 @@ body{background:var(--bg);color:var(--text);
   <div class="logo"><div class="pulse"></div>Concord</div>
   <div class="hdr-mid">
     <span class="hdr-desc">AI DevSecOps Orchestration Platform</span>
+    <div class="tabs" style="margin-left:8px">
+      <button class="tab active" data-view="findings" onclick="switchView('findings')">Findings</button>
+      <button class="tab" data-view="approvals" onclick="switchView('approvals')">Approvals<span class="cnt" id="tab-approvals-cnt"></span></button>
+      <button class="tab" data-view="audit" onclick="switchView('audit')">Audit</button>
+    </div>
     <span id="scan-status-text" style="font-size:11px;color:var(--muted)"></span>
   </div>
   <div class="hdr-right">
@@ -226,7 +262,7 @@ body{background:var(--bg);color:var(--text);
   </aside>
 
   <!-- ── Main ── -->
-  <div class="main">
+  <div class="main" id="view-findings" data-view="findings">
 
     <!-- Findings list -->
     <div class="f-panel">
@@ -260,6 +296,33 @@ body{background:var(--bg);color:var(--text);
     </div>
 
   </div>
+
+  <!-- ── Approvals view ── -->
+  <div class="main" id="view-approvals" data-view="approvals" style="display:none">
+    <div class="f-panel" style="flex:1">
+      <div class="p-hdr">
+        <span class="p-title">Pending Approvals</span>
+        <span class="p-live"><span class="live-dot"></span> live</span>
+      </div>
+      <div class="tbl-wrap" id="approvals-body">
+        <div class="view-empty">Loading…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Audit view ── -->
+  <div class="main" id="view-audit" data-view="audit" style="display:none">
+    <div class="f-panel" style="flex:1">
+      <div class="p-hdr">
+        <span class="p-title">Audit Trail</span>
+        <span class="p-live"><span class="live-dot"></span> live</span>
+      </div>
+      <div class="tbl-wrap" id="audit-body">
+        <div class="view-empty">Loading…</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -501,6 +564,90 @@ async function approveFinding(findingId, agent) {
   }
 }
 
+// ── View switching + new data views ────────────────────────────
+
+let currentView = 'findings';
+
+function switchView(v){
+  currentView = v;
+  document.querySelectorAll('.tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.view === v));
+  ['findings','approvals','audit'].forEach(name => {
+    const el = document.getElementById('view-'+name);
+    if (el) el.style.display = (name === v) ? 'flex' : 'none';
+  });
+  if (v === 'audit') loadAudit();
+  if (v === 'approvals') loadApprovals();
+}
+
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadApprovals(){
+  const box = document.getElementById('approvals-body');
+  try {
+    const r = await fetch('/events/approvals/pending');
+    const d = await r.json();
+    const pending = d.pending || [];
+    document.getElementById('tab-approvals-cnt').textContent =
+      pending.length ? '('+pending.length+')' : '';
+    if (!pending.length){
+      box.innerHTML = '<div class="view-empty">'+
+        '<div style="font-size:28px;opacity:.2">✓</div>'+
+        'No approvals pending. Everything is resolved.</div>';
+      return;
+    }
+    let rows = '';
+    for (const f of pending){
+      const agents = Object.keys((f.result||{}).agents||{});
+      const btns = agents.map(a =>
+        `<button class="approve-btn" onclick="approveFinding('${esc(f.id)}','${esc(a)}')">`+
+        `✓ ${esc(a)}</button>`).join(' ');
+      rows += `<tr><td class="mono">${esc(f.id)}</td>`+
+        `<td>${esc(f.severity)}</td>`+
+        `<td class="mono">${esc((f.artifact||'').split('/').pop())}</td>`+
+        `<td>${btns}</td></tr>`;
+    }
+    box.innerHTML = `<table class="dtbl"><thead><tr>`+
+      `<th>Finding</th><th>Severity</th><th>Artifact</th><th>Approve agent</th>`+
+      `</tr></thead><tbody>${rows}</tbody></table>`;
+  } catch(e){
+    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
+  }
+}
+
+async function loadAudit(){
+  const box = document.getElementById('audit-body');
+  try {
+    const r = await fetch('/audit/?limit=100');
+    const d = await r.json();
+    const entries = d.entries || [];
+    if (!entries.length){
+      box.innerHTML = '<div class="view-empty">No audit entries yet.</div>';
+      return;
+    }
+    let rows = '';
+    for (const e of entries){
+      const pathCls = (e.path||'').includes('ai') ? 'ai' : 'fast';
+      rows += `<tr>`+
+        `<td class="mono">${esc(e.finding_id)}</td>`+
+        `<td><span class="chip ${pathCls}">${esc(e.path)}</span></td>`+
+        `<td>${esc(e.reason)}</td>`+
+        `<td>${esc(e.agent||'—')}</td>`+
+        `<td class="rid">${esc(e.correlation_id||'-')}</td>`+
+        `<td class="mono">${esc((e.timestamp||'').slice(0,19))}</td></tr>`;
+    }
+    box.innerHTML = `<table class="dtbl"><thead><tr>`+
+      `<th>Finding</th><th>Path</th><th>Reason</th><th>Agent</th>`+
+      `<th>Correlation</th><th>Time</th>`+
+      `</tr></thead><tbody>${rows}</tbody></table>`;
+  } catch(e){
+    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
+  }
+}
+
 // ── Poll findings ──────────────────────────────────────────────
 
 async function refresh() {
@@ -519,9 +666,23 @@ async function refresh() {
 
     renderList(findings);
     if (sel) pick(sel);
+
+    // Keep the approvals count badge and the active auxiliary view live.
+    if (currentView === 'audit') loadAudit();
+    else if (currentView === 'approvals') loadApprovals();
+    else refreshApprovalsCount();
   } catch(e) {
     document.getElementById('status-pill').textContent = '● Offline';
   }
+}
+
+async function refreshApprovalsCount(){
+  try {
+    const r = await fetch('/events/approvals/pending');
+    const d = await r.json();
+    const n = (d.pending||[]).length;
+    document.getElementById('tab-approvals-cnt').textContent = n ? '('+n+')' : '';
+  } catch(e){ /* ignore */ }
 }
 
 setInterval(refresh, 2000);

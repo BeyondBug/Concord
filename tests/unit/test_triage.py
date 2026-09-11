@@ -1,5 +1,5 @@
 """Tests for the triage gate rule engine."""
-from datetime import datetime
+from datetime import UTC, datetime
 
 from core.models.finding import Finding
 from core.triage.gate import TriageGate
@@ -11,7 +11,7 @@ def make_finding(severity: str = "HIGH", finding_id: str = "f1") -> Finding:
     return Finding(
         id=finding_id, source="test", artifact="main.tf",
         severity=severity, title="Test", description="",
-        raw={}, timestamp=datetime.utcnow(),
+        raw={}, timestamp=datetime.now(UTC),
     )
 
 

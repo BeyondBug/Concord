@@ -1,28 +1,57 @@
-version: "3.9"
-
+# Production-leaning compose. For local hot-reload development, use the
+# documented override in docker-compose.override.yml.example (copy to
+# docker-compose.override.yml — it is gitignored).
 services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: concord
-      POSTGRES_PASSWORD: concord
-      POSTGRES_DB: concord
-    ports: ["5432:5432"]
+      POSTGRES_USER: ${POSTGRES_USER:-concord}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-concord}
     volumes: [pg_data:/var/lib/postgresql/data]
+    # Bind to loopback only; do not expose the DB on all interfaces.
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-concord}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    ports: ["127.0.0.1:6379:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
   api:
     build: .
-    ports: ["8000:8000"]
+    ports: ["127.0.0.1:8000:8000"]
     env_file: .env
-    depends_on: [postgres, redis]
+    environment:
+      CONCORD_DB_PATH: ${CONCORD_DB_PATH:-/data/concord.db}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
-      - .:/app
+      - concord_data:/data
       - ./connectors/tools.yaml:/app/connectors/tools.yaml:ro
-    command: uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+    # Least privilege at the container level.
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
 
 volumes:
   pg_data:
+  concord_data:

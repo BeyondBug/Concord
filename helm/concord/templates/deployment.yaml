@@ -1,1 +1,69 @@
-# TODO Phase 4
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-concord
+  labels:
+    app.kubernetes.io/name: concord
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: concord
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: concord
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- if .Values.serviceAccount.create }}
+      serviceAccountName: {{ .Values.serviceAccount.name | default (printf "%s-concord" .Release.Name) }}
+      {{- end }}
+      automountServiceAccountToken: false
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: concord
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- if .Values.envFromSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.envFromSecret }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: data
+          emptyDir:
+            sizeLimit: {{ .Values.dataVolume.sizeLimit }}
+        - name: tmp
+          emptyDir: {}

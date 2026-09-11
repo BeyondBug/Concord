@@ -4,12 +4,13 @@ Main orchestrator — triage → agents → arbitration → LLM → store.
 """
 import logging
 import os
-from datetime import datetime
+from datetime import UTC, datetime
 
 from core.arbitration.resolver import arbitrate
 from core.mcp_runtime.audit import AuditEntry, AuditLog
 from core.models.agent_response import AgentResponse, compute_confidence
 from core.models.finding import Finding
+from core.persistence import AuditRecord, FindingRecord, get_store
 from core.triage.gate import TriageGate
 from core.triage.rules.dedup import DedupRule
 from core.triage.rules.patterns import KnownPatternRule
@@ -39,10 +40,8 @@ class Orchestrator:
             logger.info("[TRIAGE]  FAST PATH — %s", reason)
             result = {"path": "fast_path", "reason": reason, "pr_comment": None}
             self._store(finding, result)
-            self.audit.record(AuditEntry(
-                finding_id=finding.id, path="fast_path",
-                reason=reason, agent=None, timestamp=datetime.utcnow(),
-            ))
+            self._audit(finding_id=finding.id, path="fast_path",
+                        reason=reason, agent=None)
             return result
 
         logger.info("[TRIAGE]  ESCALATE — %s", reason)
@@ -81,11 +80,11 @@ class Orchestrator:
             "pr_comment": pr_comment,
         }
         self._store(finding, result)
-        self.audit.record(AuditEntry(
+        self._audit(
             finding_id=finding.id, path="ai_path",
             reason="auto_resolved" if auto_resolved else "human_tiebreak",
-            agent=winner.agent, timestamp=datetime.utcnow(),
-        ))
+            agent=winner.agent,
+        )
         logger.info("[OUTPUT]  %s", "auto-resolved" if auto_resolved else "human tiebreak")
         return result
 
@@ -94,9 +93,14 @@ class Orchestrator:
     async def _run_agents(self, finding: Finding) -> list[AgentResponse]:
         from agents.cicd.agent import CICDAgent
         from agents.infra.agent import InfraAgent
+        from agents.security.agent import SecurityPolicyAgent
 
         responses = []
-        for domain, agent in [("infra", InfraAgent()), ("cicd", CICDAgent())]:
+        for domain, agent in [
+            ("infra", InfraAgent()),
+            ("cicd", CICDAgent()),
+            ("security", SecurityPolicyAgent()),
+        ]:
             try:
                 resp = await agent.analyze(finding)
                 resp.confidence_score = compute_confidence(domain, finding.severity)
@@ -121,14 +125,15 @@ class Orchestrator:
 
         if use_llm:
             try:
+                from core.orchestrator.context import sanitize_tool_output
                 from core.orchestrator.llm import LLMBackend
                 llm = LLMBackend()
                 analysis = await llm.generate_analysis(
                     finding_id=finding.id,
                     severity=finding.severity,
                     artifact=finding.artifact,
-                    title=finding.title,
-                    description=finding.description,
+                    title=sanitize_tool_output(finding.title, max_len=200),
+                    description=sanitize_tool_output(finding.description),
                 )
                 if analysis.get("root_cause"):
                     winner.root_cause = analysis["root_cause"]
@@ -162,16 +167,35 @@ class Orchestrator:
             )
 
     def _store(self, finding: Finding, result: dict) -> None:
+        """Persist the finding decision. Failures are logged, never swallowed."""
         try:
-            from api.routes.findings import store
-            store.add(
-                finding_id=finding.id,
+            get_store().add_finding(FindingRecord(
+                id=finding.id,
                 severity=finding.severity,
                 artifact=finding.artifact,
                 repo=finding.repository,
                 source=finding.source,
                 path=result["path"],
+                agent=result.get("agent"),
                 result=result,
-            )
-        except Exception:
-            pass  # store is optional
+            ))
+        except Exception:  # noqa: BLE001 - storage must not crash processing
+            logger.exception("[STORE]  failed to persist finding %s", finding.id)
+
+    def _audit(self, finding_id: str, path: str,
+               reason: str, agent: str | None) -> None:
+        """Write the audit trail to both the logger and durable storage.
+
+        Every decision — including fast-path — must be auditable, so a storage
+        failure is logged loudly rather than silently dropped.
+        """
+        self.audit.record(AuditEntry(
+            finding_id=finding_id, path=path, reason=reason,
+            agent=agent, timestamp=datetime.now(UTC),
+        ))
+        try:
+            get_store().add_audit(AuditRecord(
+                finding_id=finding_id, path=path, reason=reason, agent=agent,
+            ))
+        except Exception:  # noqa: BLE001 - audit log must not crash processing
+            logger.exception("[AUDIT]  failed to persist audit for %s", finding_id)
