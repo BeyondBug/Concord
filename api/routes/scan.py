@@ -40,6 +40,7 @@ async def approve_finding(finding_id: str, agent: str):
     Creates a GitHub issue on crms-devops/crms if GITHUB_TOKEN is set.
     """
     from api.routes.findings import store
+    from core.persistence import AuditRecord, get_store
     f = store.get(finding_id)
     if not f:
         raise HTTPException(status_code=404, detail="Finding not found")
@@ -47,10 +48,32 @@ async def approve_finding(finding_id: str, agent: str):
     result = f.get("result", {})
     pr_comment = result.get("pr_comment", "")
 
-    # Mark as resolved in store
+    # Guard: only allow approving an agent that actually participated, when we
+    # know the candidates. Prevents recording an approval for a bogus agent.
+    candidates = result.get("agents")
+    if isinstance(candidates, dict) and agent not in candidates:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent '{agent}' is not a candidate for this finding. "
+                   f"Choose one of: {', '.join(sorted(candidates))}.",
+        )
+
+    # Durably record the human resolution (previously this mutated a copy that
+    # never reached storage).
     result["approved_by"]   = agent
     result["approved_at"]   = datetime.now(UTC).isoformat()
     result["auto_resolved"] = True   # now resolved by human
+    result["agent"]         = agent
+    result["needs_approval"] = False
+    persisted = get_store().update_finding_result(finding_id, result)
+
+    # Every decision — including a human approval — must be auditable.
+    get_store().add_audit(AuditRecord(
+        finding_id=finding_id, path="ai_path",
+        reason=f"human_approved:{agent}", agent=agent,
+    ))
+    logger.info("[APPROVAL]  finding=%s approved agent=%s persisted=%s",
+                finding_id, agent, persisted)
 
     github_url = None
     token = os.getenv("GITHUB_TOKEN", "")
@@ -77,11 +100,20 @@ async def approve_finding(finding_id: str, agent: str):
         "status":      "approved",
         "finding_id":  finding_id,
         "agent":       agent,
+        "persisted":   persisted,
         "github_url":  github_url,
         "message":     (f"GitHub issue created: {github_url}"
                         if github_url else
                         "Approved (set GITHUB_TOKEN in .env to create GitHub issue)"),
     }
+
+
+@router.get("/approvals/pending")
+async def list_pending_approvals(limit: int = 100):
+    """List AI-path findings awaiting a human decision (tiebreaks)."""
+    from core.persistence import get_store
+    pending = get_store().list_pending_approvals(limit=limit)
+    return {"pending": pending, "total": len(pending)}
 
 
 async def _run_scan():

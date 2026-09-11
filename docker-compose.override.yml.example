@@ -1,0 +1,10 @@
+# Local development override — copy to docker-compose.override.yml (gitignored).
+# Enables source hot-reload and relaxes the read-only root filesystem so the
+# reloader can write. NEVER use these settings in production.
+services:
+  api:
+    read_only: false
+    volumes:
+      - .:/app
+      - ./connectors/tools.yaml:/app/connectors/tools.yaml:ro
+    command: uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
