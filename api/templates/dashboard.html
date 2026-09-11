@@ -856,11 +856,11 @@ async function loadApprovals(){
     for (const f of pending){
       const agents = Object.keys((f.result||{}).agents||{});
       const btns = agents.map(a =>
-        `<button class="approve-btn" onclick="approveFinding('${esc(f.id)}','${esc(a)}')">`+
+        `<button class="approve-btn" onclick="approveFinding(${esc(JSON.stringify(f.id))},${esc(JSON.stringify(a))})">`+
         `✓ ${esc(a)}</button>`).join(' ') +
         ` <button class="approve-btn" style="background:var(--surface2);`+
         `border:1px solid var(--red);color:var(--red)" `+
-        `onclick="rejectFinding('${esc(f.id)}')">✕ reject</button>`;
+        `onclick="rejectFinding(${esc(JSON.stringify(f.id))})">✕ reject</button>`;
       rows += `<tr><td class="mono">${esc(f.id)}</td>`+
         `<td>${esc(f.severity)}</td>`+
         `<td class="mono">${esc((f.artifact||'').split('/').pop())}</td>`+
