@@ -3,7 +3,7 @@
 Every test runs against an in-memory SQLite store so nothing touches disk and
 the state is isolated per test.
 """
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -84,7 +84,7 @@ async def test_orchestrator_persists_fast_path(orchestrator_with_mem_store):
 
     finding = Finding(
         id="LOW-1", source="t", artifact="x", severity="LOW",
-        title="t", description="d", raw={}, timestamp=datetime.utcnow())
+        title="t", description="d", raw={}, timestamp=datetime.now(UTC))
     result = await Orchestrator().process(finding)
     assert result["path"] == "fast_path"
 
@@ -104,7 +104,7 @@ async def test_orchestrator_audits_every_finding(orchestrator_with_mem_store):
     for fid, sev in [("L1", "LOW"), ("L2", "INFORMATIONAL")]:
         await orch.process(Finding(
             id=fid, source="t", artifact="x", severity=sev,
-            title="t", description="d", raw={}, timestamp=datetime.utcnow()))
+            title="t", description="d", raw={}, timestamp=datetime.now(UTC)))
 
     audited_ids = {a["finding_id"] for a in orchestrator_with_mem_store.list_audit()}
     assert {"L1", "L2"} <= audited_ids

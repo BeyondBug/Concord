@@ -8,3 +8,4 @@ redis>=5.0
 python-dotenv>=1.0
 typer[all]>=0.12
 rich>=13.0
+psycopg[binary,pool]>=3.1

@@ -1,5 +1,5 @@
 """Integration tests for the SecurityPolicyAgent (Phase 3)."""
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pytest
 
@@ -11,7 +11,7 @@ from core.models.finding import Finding
 def _finding(artifact: str) -> Finding:
     return Finding(
         id="SEC-1", source="test", artifact=artifact, severity="HIGH",
-        title="t", description="d", raw={}, timestamp=datetime.utcnow(),
+        title="t", description="d", raw={}, timestamp=datetime.now(UTC),
     )
 
 

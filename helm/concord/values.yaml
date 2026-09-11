@@ -1,9 +1,62 @@
 replicaCount: 1
+
 image:
   repository: ghcr.io/beyondbug/concord
   tag: latest
+  pullPolicy: IfNotPresent
+
 service:
   type: ClusterIP
   port: 8000
+
+# Non-secret configuration. Secrets (API key, DB URL, tokens) must come from
+# a Kubernetes Secret referenced via envFrom — never hardcode them here.
 env:
   LLM_PROVIDER: ollama
+  CONCORD_DB_PATH: /data/concord.db
+
+# Name of a pre-created Secret with sensitive env vars (CONCORD_API_KEY, etc).
+# Leave empty to run without it (dev only).
+envFromSecret: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+
+# Ephemeral writable storage for the SQLite default backend. Use a PVC or the
+# PostgreSQL backend for durable multi-replica deployments.
+dataVolume:
+  sizeLimit: 256Mi
+
+serviceAccount:
+  create: true
+  name: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+probes:
+  liveness:
+    path: /health
+    initialDelaySeconds: 10
+    periodSeconds: 30
+  readiness:
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10

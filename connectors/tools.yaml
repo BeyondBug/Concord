@@ -13,6 +13,13 @@ connectors:
     capabilities:
       - scan_terraform
       - report_sarif
+    # Optional per-connector TLS (all fields optional; secure by default).
+    # In production use https:// URLs. Example with a private CA + mTLS:
+    # tls:
+    #   ca_bundle:   /etc/concord/certs/ca.pem
+    #   client_cert: /etc/concord/certs/concord-client.pem
+    #   client_key:  /etc/concord/certs/concord-client.key
+    #   verify:      true
 
   - name: trivy
     type: mcp

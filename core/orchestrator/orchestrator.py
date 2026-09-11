@@ -125,14 +125,15 @@ class Orchestrator:
 
         if use_llm:
             try:
+                from core.orchestrator.context import sanitize_tool_output
                 from core.orchestrator.llm import LLMBackend
                 llm = LLMBackend()
                 analysis = await llm.generate_analysis(
                     finding_id=finding.id,
                     severity=finding.severity,
                     artifact=finding.artifact,
-                    title=finding.title,
-                    description=finding.description,
+                    title=sanitize_tool_output(finding.title, max_len=200),
+                    description=sanitize_tool_output(finding.description),
                 )
                 if analysis.get("root_cause"):
                     winner.root_cause = analysis["root_cause"]

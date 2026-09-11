@@ -9,8 +9,10 @@ and keeps the door open for a PostgreSQL backend later behind the same API.
 
 Concurrency: a module-level lock serializes writes; connections use
 ``check_same_thread=False`` so the FastAPI thread pool and the orchestrator can
-share one store instance. This is adequate for the current single-process
-deployment. A PostgreSQL backend would replace this class wholesale.
+share one store instance. This is adequate for single-process deployments. For
+multi-replica deployments, set CONCORD_DATABASE_URL to use the PostgreSQL
+backend (core/persistence/postgres_store.py), which get_store() selects
+automatically; SQLite remains the zero-dependency default and fallback.
 """
 from __future__ import annotations
 
@@ -49,7 +51,14 @@ class AuditRecord:
     path: str
     reason: str
     agent: str | None
+    correlation_id: str = field(default_factory=lambda: _current_correlation_id())
     timestamp: str = field(default_factory=_utcnow)
+
+
+def _current_correlation_id() -> str:
+    # Imported lazily to avoid a hard import cycle at module load.
+    from core.observability import get_correlation_id
+    return get_correlation_id()
 
 
 _SCHEMA = """
@@ -74,6 +83,7 @@ CREATE TABLE IF NOT EXISTS audit (
     path       TEXT NOT NULL,
     reason     TEXT NOT NULL,
     agent      TEXT,
+    correlation_id TEXT NOT NULL DEFAULT '-',
     timestamp  TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_finding ON audit(finding_id);
@@ -92,7 +102,24 @@ class SQLiteStore:
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA journal_mode=WAL;")
         self._conn.executescript(_SCHEMA)
+        self._migrate()
         logger.info("SQLiteStore ready at %s", self._path)
+
+    def _migrate(self) -> None:
+        """Additive migrations for databases created by an older schema."""
+        cols = {row["name"] for row in
+                self._conn.execute("PRAGMA table_info(audit)").fetchall()}
+        if "correlation_id" not in cols:
+            self._conn.execute(
+                "ALTER TABLE audit ADD COLUMN correlation_id TEXT NOT NULL "
+                "DEFAULT '-'"
+            )
+            logger.info("SQLiteStore: migrated audit table (correlation_id)")
+        # Safe now that the column exists (fresh or migrated).
+        self._conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_audit_correlation "
+            "ON audit(correlation_id)"
+        )
 
     # ── Findings ──────────────────────────────────────────────────────
 
@@ -125,6 +152,47 @@ class SQLiteStore:
             ).fetchone()
         return self._finding_row_to_dict(row) if row else None
 
+    def update_finding_result(self, finding_id: str,
+                              result: dict[str, Any]) -> bool:
+        """Replace the stored result JSON for the latest row of a finding.
+
+        Returns True if a row was updated. Used by the approval flow to durably
+        record that a human resolved a tiebreak — the previous code mutated a
+        deserialized copy, which never reached storage.
+        """
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT row_id FROM findings WHERE id = ? "
+                "ORDER BY row_id DESC LIMIT 1", (finding_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            self._conn.execute(
+                "UPDATE findings SET result = ?, agent = ? WHERE row_id = ?",
+                (json.dumps(result), result.get("agent"), row["row_id"]),
+            )
+            return True
+
+    def list_pending_approvals(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return AI-path findings awaiting a human decision.
+
+        A finding is pending when it took the ai_path, is not yet resolved
+        (auto_resolved is False), and has not been approved.
+        """
+        limit = max(1, min(limit, 500))
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT * FROM findings WHERE path = 'ai_path' "
+                "ORDER BY row_id DESC LIMIT ?", (limit,),
+            ).fetchall()
+        pending = []
+        for r in rows:
+            d = self._finding_row_to_dict(r)
+            res = d.get("result", {})
+            if res.get("auto_resolved") is False and not res.get("approved_by"):
+                pending.append(d)
+        return pending
+
     def finding_stats(self) -> dict[str, int]:
         with self._lock:
             total = self._conn.execute(
@@ -148,17 +216,18 @@ class SQLiteStore:
     def add_audit(self, record: AuditRecord) -> None:
         with self._lock:
             self._conn.execute(
-                "INSERT INTO audit (finding_id, path, reason, agent, timestamp) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO audit "
+                "(finding_id, path, reason, agent, correlation_id, timestamp) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
                 (record.finding_id, record.path, record.reason,
-                 record.agent, record.timestamp),
+                 record.agent, record.correlation_id, record.timestamp),
             )
 
     def list_audit(self, limit: int = 100) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 1000))
         with self._lock:
             rows = self._conn.execute(
-                "SELECT finding_id, path, reason, agent, timestamp "
+                "SELECT finding_id, path, reason, agent, correlation_id, timestamp "
                 "FROM audit ORDER BY row_id DESC LIMIT ?", (limit,)
             ).fetchall()
         return [dict(r) for r in rows]
@@ -185,22 +254,43 @@ class SQLiteStore:
 
 # ── Module-level singleton accessor ───────────────────────────────────
 
-_store_singleton: SQLiteStore | None = None
+_store_singleton: Any | None = None
 _singleton_lock = threading.Lock()
 
 
-def get_store() -> SQLiteStore:
+def _build_default_store():
+    """Pick a backend: Postgres when configured + reachable, else SQLite.
+
+    Selected by CONCORD_DATABASE_URL or POSTGRES_URL. Any connection failure
+    falls back to SQLite and logs the downgrade, so a missing/broken Postgres
+    never takes the platform down (fail-safe, matching the dedup store).
+    """
+    dsn = os.getenv("CONCORD_DATABASE_URL") or os.getenv("POSTGRES_URL") or ""
+    dsn = dsn.strip()
+    if not dsn:
+        return SQLiteStore()
+    try:
+        from core.persistence.postgres_store import PostgresStore
+        store = PostgresStore(dsn)
+        logger.info("Persistence backend: PostgreSQL")
+        return store
+    except Exception as exc:  # noqa: BLE001 - any failure → safe SQLite fallback
+        logger.warning("PostgreSQL unavailable (%s); falling back to SQLite.", exc)
+        return SQLiteStore()
+
+
+def get_store():
     """Return the process-wide store, creating it on first use."""
     global _store_singleton
     if _store_singleton is None:
         with _singleton_lock:
             if _store_singleton is None:
-                _store_singleton = SQLiteStore()
+                _store_singleton = _build_default_store()
     return _store_singleton
 
 
 def _reset_store_for_tests(db_path: str = ":memory:") -> SQLiteStore:
-    """Replace the singleton with a fresh in-memory store. Test-only."""
+    """Replace the singleton with a fresh in-memory SQLite store. Test-only."""
     global _store_singleton
     with _singleton_lock:
         if _store_singleton is not None:
