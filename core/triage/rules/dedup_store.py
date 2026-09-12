@@ -87,7 +87,7 @@ def get_dedup_store(ttl_seconds: int = DEFAULT_TTL_SECONDS):
         client = redis.Redis.from_url(url, socket_connect_timeout=1,
                                       socket_timeout=1, decode_responses=True)
         client.ping()
-        logger.info("Dedup using Redis at %s", url)
+        logger.info("Dedup using Redis")
         return RedisDedupStore(client, ttl_seconds)
     except Exception as exc:  # noqa: BLE001 - any Redis failure → safe fallback
         logger.warning("Redis unavailable (%s); dedup falling back to in-memory.",

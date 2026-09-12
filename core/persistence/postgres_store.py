@@ -97,13 +97,24 @@ class PostgresStore:
                  json.dumps(record.result), record.timestamp),
             )
 
-    def list_findings(self, limit: int = 50) -> list[dict[str, Any]]:
+    def list_findings(self, limit: int = 50, severity: str | None = None,
+                      path: str | None = None) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
+        clauses, params = [], []
+        if severity:
+            clauses.append("severity = %s")
+            params.append(severity.upper())
+        if path:
+            clauses.append("path = %s")
+            params.append(path)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(limit)
         with self._pool.connection() as conn:
             rows = conn.execute(
                 "SELECT id, severity, artifact, repo, source, path, agent, "
-                "result, timestamp FROM findings ORDER BY row_id DESC LIMIT %s",
-                (limit,),
+                "result, timestamp FROM findings" + where +
+                " ORDER BY row_id DESC LIMIT %s",
+                params,
             ).fetchall()
         return [self._finding_row(r) for r in rows]
 
@@ -147,6 +158,39 @@ class PostgresStore:
                 pending.append(d)
         return pending
 
+    def severity_breakdown(self) -> dict[str, int]:
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT severity, COUNT(*) FROM findings GROUP BY severity"
+            ).fetchall()
+        return {r[0]: r[1] for r in rows}
+
+    def incidents(self, limit: int = 50) -> list[dict[str, Any]]:
+        limit = max(1, min(limit, 200))
+        _rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1,
+                 "INFORMATIONAL": 0}
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT artifact, severity, path, result, timestamp "
+                "FROM findings ORDER BY row_id DESC"
+            ).fetchall()
+        groups: dict[str, dict[str, Any]] = {}
+        for r in rows:
+            art = r[0] or "(unknown)"
+            g = groups.setdefault(art, {
+                "artifact": art, "count": 0, "max_severity": "INFORMATIONAL",
+                "unresolved": 0, "last_seen": r[4],
+            })
+            g["count"] += 1
+            if _rank.get(r[1], 0) > _rank.get(g["max_severity"], 0):
+                g["max_severity"] = r[1]
+            res = _as_dict(r[3])
+            if res.get("auto_resolved") is False and not res.get("approved_by"):
+                g["unresolved"] += 1
+        out = sorted(groups.values(),
+                     key=lambda g: (-_rank.get(g["max_severity"], 0), -g["count"]))
+        return out[:limit]
+
     def finding_stats(self) -> dict[str, int]:
         with self._pool.connection() as conn:
             total = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
@@ -178,6 +222,17 @@ class PostgresStore:
             rows = conn.execute(
                 "SELECT finding_id, path, reason, agent, correlation_id, timestamp "
                 "FROM audit ORDER BY row_id DESC LIMIT %s", (limit,),
+            ).fetchall()
+        return [{"finding_id": r[0], "path": r[1], "reason": r[2],
+                 "agent": r[3], "correlation_id": r[4], "timestamp": r[5]}
+                for r in rows]
+
+    def audit_for_finding(self, finding_id: str) -> list[dict[str, Any]]:
+        with self._pool.connection() as conn:
+            rows = conn.execute(
+                "SELECT finding_id, path, reason, agent, correlation_id, timestamp "
+                "FROM audit WHERE finding_id = %s ORDER BY row_id ASC",
+                (finding_id,),
             ).fetchall()
         return [{"finding_id": r[0], "path": r[1], "reason": r[2],
                  "agent": r[3], "correlation_id": r[4], "timestamp": r[5]}

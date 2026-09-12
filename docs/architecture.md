@@ -1,33 +1,111 @@
 # Concord Architecture
 
-Full diagram: docs/diagrams/architecture.png
+This document describes how Concord is built and how a finding flows through it.
+It reflects the **implemented** system; components that are scaffolded but not
+yet wired to live services are marked *planned*.
 
-## Layer 1 — MCP Runtime (core/mcp_runtime/)
+## Component overview
 
-Secure transport with mTLS and auth.
-Tool registry that discovers connectors from tools.yaml at startup.
-Audit log that records every action, including fast-path decisions.
+```mermaid
+flowchart LR
+    subgraph Interfaces
+      CLI[CLI]
+      DASH[Dashboard]
+      WH[GitHub webhook]
+    end
+    subgraph API[FastAPI]
+      MW[Auth + correlation middleware]
+      R[Routes]
+    end
+    subgraph Core
+      ORCH[Orchestrator]
+      TRIAGE[Triage gate]
+      ARB[Arbitration]
+      BROKER[Credential broker]
+      SAN[Tool-output sanitizer]
+    end
+    subgraph Agents
+      INFRA[Infra]
+      CICD[CI/CD]
+      SEC[Security]
+      K8S[Kubernetes*]
+      OBS[Observability*]
+    end
+    subgraph Runtime[MCP runtime]
+      TRANS[Secure transport TLS/mTLS]
+      REG[Registry]
+    end
+    subgraph Data
+      STORE[(SQLite / PostgreSQL)]
+      AUDIT[(Audit)]
+    end
+    LLM[LLM provider*swappable]
 
-## Layer 2 — Agent Orchestrator (core/orchestrator/)
+    CLI & DASH & WH --> MW --> R --> ORCH
+    ORCH --> TRIAGE --> ARB
+    ORCH --> Agents
+    ORCH --> SAN --> LLM
+    Agents --> TRANS --> REG
+    Agents --> BROKER
+    ORCH --> STORE --> AUDIT
+```
 
-Routes findings to the relevant domain agent(s).
-Calls pluggable LLM backend (Ollama or BYO API key).
-Context window management with tool output sanitization.
+`*` planned / scaffolded.
 
-## Layer 3 — Domain Agents (agents/)
+## Execution sequence (AI path with a tie-break)
 
-Infra agent         TerraSecure ML scanner      custom-built   Jash
-CI/CD agent         Trivy + Checkov             custom-built   rj-karan
-Kubernetes agent    kagent (Apache 2.0)         composed OSS   Jash
-Observability agent HolmesGPT (MIT)             composed OSS   rj-karan
-Security agent      OPA / Semgrep               custom-built   Both (Phase 3)
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant A as API
+    participant O as Orchestrator
+    participant Ag as Agents
+    participant Ar as Arbitration
+    participant S as Store/Audit
 
-## Layer 2B — Conflict Resolution (core/arbitration/)
+    C->>A: finding (X-Request-ID)
+    A->>O: process(finding)  [correlation set]
+    O->>O: triage → escalate
+    O->>Ag: analyze(finding)
+    Ag-->>O: results + confidence (deterministic)
+    O->>Ar: rank
+    Ar-->>O: close gap → human tie-break
+    O->>S: persist finding + audit (correlation_id)
+    A-->>C: pending approval
+    C->>A: approve <agent> / reject / (expire)
+    A->>S: durable resolution + audit
+```
 
-confidence_score = severity_weight * source_reliability
-NOT self-reported LLM confidence — see design/arbitration-design.md.
-Clear gap (>=0.15): auto-resolve. Close gap: human tiebreak PR comment.
+## Design decisions
 
-## Layer 4 — Existing Tools (connectors/tools.yaml)
+### Deterministic confidence
+Arbitration ranks agents by `severity_weight × source_reliability`, defined in
+`core/models/agent_response.py` and `core/arbitration/`. The LLM never
+self-reports confidence; this keeps ranking reproducible and auditable.
 
-Not replaced. Orchestrated. Declared in tools.yaml.
+### Persistence is swappable behind one accessor
+`core/persistence/get_store()` returns a PostgreSQL-backed store when
+`CONCORD_DATABASE_URL`/`POSTGRES_URL` is set and reachable, else SQLite. Both
+implement the same method surface. Any connection failure logs a warning and
+falls back to SQLite so a missing database never takes the platform down.
+
+### Correlation IDs
+The request middleware sets a `contextvars` correlation ID from `X-Request-ID`.
+It propagates into deep code (orchestrator, persistence) without threading it
+through call signatures, and is written onto every audit row and log line.
+
+### Human-in-the-loop
+Close arbitration calls become pending approvals rather than auto-resolving.
+Approve/reject/expire are all durable and audited. Nothing destructive happens
+without an explicit human decision.
+
+### Security boundaries
+- API-key auth guards data/state routes; fail-safe dev mode when unset.
+- MCP transport verifies TLS by default; supports CA bundles and mTLS; refuses
+  plaintext unless explicitly opted in.
+- Untrusted tool output is sanitized (control/zero-width/marker stripping,
+  injection flagging, delimiting) before entering an LLM prompt.
+
+## Directory map
+
+See the "Project structure" section of the top-level `README.md`.

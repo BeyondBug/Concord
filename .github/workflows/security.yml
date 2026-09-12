@@ -5,25 +5,49 @@ on:
     branches: [main, develop]
   pull_request:
 
+# Default to read-only; the SARIF upload job elevates only what it needs.
 permissions:
   contents: read
-  security-events: write
-  actions: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   trivy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write   # required to upload SARIF to code scanning
     steps:
       - uses: actions/checkout@v4
-      - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@master
+
+      - name: Trivy filesystem scan
+        # Pinned to a released tag rather than @master for supply-chain safety.
+        uses: aquasecurity/trivy-action@0.35.0
         with:
           scan-type: fs
           scan-ref: .
           format: sarif
           output: trivy.sarif
+          severity: CRITICAL,HIGH
+
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy.sarif
         continue-on-error: true
+
+  pip-audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Audit Python dependencies
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements/base.txt
