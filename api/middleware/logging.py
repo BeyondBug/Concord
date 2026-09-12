@@ -35,6 +35,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         )
 
         start = time.perf_counter()
+        token = set_correlation_id(request_id)
         try:
             response = await call_next(request)
         except Exception:
@@ -55,4 +56,3 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             return response
         finally:
             reset_correlation_id(token)
-        return response
