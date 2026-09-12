@@ -54,6 +54,9 @@ async def approve_finding(finding_id: str, agent: str):
             or result.get("rejected")
             or result.get("expired")):
         raise HTTPException(status_code=409, detail="Finding is not awaiting approval.")
+
+    candidates = set(result.get("agents", {}).keys())
+    if candidates and agent not in candidates:
         raise HTTPException(
             status_code=400,
             detail=f"Agent '{agent}' is not a candidate for this finding. "

@@ -334,6 +334,7 @@ class SourceCodeScanner:
                 and p.suffix in self.LANG_BY_EXT
                 and not any(skip in p.parts for skip in self._SKIP_DIRS)
             ]
+        )
         
         if not files:
             logger.info("SourceCodeScanner: no source files under %s", directory)
