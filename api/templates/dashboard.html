@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Concord — AI DevSecOps Platform</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%231C9C76'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%230D0D0F'/%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#0D0D0F;--surface:#141417;--surface2:#1C1C22;--border:#2A2A32;
@@ -22,8 +23,10 @@ body{background:var(--bg);color:var(--text);
 .logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;color:#fff;flex-shrink:0}
 .pulse{width:9px;height:9px;border-radius:50%;background:var(--brand);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.hdr-mid{flex:1;display:flex;align-items:center;gap:10px}
-.hdr-desc{font-size:12px;color:var(--muted)}
+.hdr-mid{flex:1;display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
+.hdr-desc{font-size:12px;color:var(--muted);white-space:nowrap;flex-shrink:0}
+.tabs{flex-shrink:0}
+@media(max-width:1100px){.hdr-desc{display:none}}
 .hdr-right{display:flex;gap:7px;align-items:center;flex-shrink:0}
 .pill{background:var(--surface2);border:1px solid var(--border);border-radius:4px;
   padding:2px 9px;font-size:11px;color:var(--muted);white-space:nowrap}
@@ -225,23 +228,23 @@ body{background:var(--bg);color:var(--text);
       <div class="sec-lbl">Agents</div>
       <div class="agent on">
         <div class="agent-name"><div class="dot dot-g"></div>Infra Agent</div>
-        <div class="agent-sub">Pattern scanner · 92% acc</div>
+        <div class="agent-sub">Pattern scanner · 0.92</div>
       </div>
       <div class="agent on">
         <div class="agent-name"><div class="dot dot-g"></div>CI/CD Agent</div>
-        <div class="agent-sub">K8s · Dockerfile scanner</div>
+        <div class="agent-sub">Trivy · Checkov · 0.88</div>
+      </div>
+      <div class="agent on">
+        <div class="agent-name"><div class="dot dot-g"></div>Security Agent</div>
+        <div class="agent-sub">Source scan · 0.85</div>
       </div>
       <div class="agent off">
-        <div class="agent-name"><div class="dot dot-d"></div>K8s Agent</div>
-        <div class="agent-sub">kagent · Phase 2A</div>
+        <div class="agent-name"><div class="dot dot-d"></div>Kubernetes</div>
+        <div class="agent-sub">kagent (MCP) · planned</div>
       </div>
       <div class="agent off">
         <div class="agent-name"><div class="dot dot-d"></div>Observability</div>
-        <div class="agent-sub">HolmesGPT · Phase 2B</div>
-      </div>
-      <div class="agent off">
-        <div class="agent-name"><div class="dot dot-d"></div>Security Policy</div>
-        <div class="agent-sub">OPA / Semgrep · Phase 3</div>
+        <div class="agent-sub">HolmesGPT (MCP) · planned</div>
       </div>
     </div>
 
@@ -260,6 +263,33 @@ body{background:var(--bg);color:var(--text);
       </div>
     </div>
   </aside>
+
+  <!-- ── Overview view ── -->
+  <div class="main" id="view-overview" data-view="overview" style="flex:1">
+    <div class="ov-wrap">
+      <div class="ov-grid" id="ov-stats">
+        <div class="ov-card"><div class="k">Total findings</div><div class="v" id="ov-total">0</div></div>
+        <div class="ov-card"><div class="k">Fast path</div><div class="v" id="ov-fast">0</div></div>
+        <div class="ov-card"><div class="k">AI path</div><div class="v" id="ov-ai">0</div></div>
+        <div class="ov-card"><div class="k">Awaiting approval</div><div class="v" id="ov-pending">0</div></div>
+      </div>
+      <div class="ov-row">
+        <div class="ov-panel">
+          <h3>Agents</h3>
+          <div id="ov-agents">
+            <div class="ov-line"><span class="mono" style="color:var(--muted)">loading…</span></div>
+          </div>
+        </div>
+        <div class="ov-panel">
+          <h3>System</h3>
+          <div class="ov-line"><span>API</span><span id="ov-api" class="mono">—</span></div>
+          <div class="ov-line"><span>Auth</span><span id="ov-auth" class="mono">—</span></div>
+          <div class="ov-line"><span>LLM provider</span><span id="ov-llm" class="mono">—</span></div>
+          <div class="ov-line"><span>Recent audit events</span><span id="ov-audit-n" class="mono">0</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- ── Main ── -->
   <div class="main" id="view-findings" data-view="findings">
@@ -687,6 +717,7 @@ async function refreshApprovalsCount(){
 
 setInterval(refresh, 2000);
 refresh();
+loadOverview();
 </script>
 </body>
 </html>

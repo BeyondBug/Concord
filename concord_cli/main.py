@@ -111,11 +111,18 @@ def health(json: bool = typer.Option(False, "--json", help="Machine-readable out
 @app.command()
 def findings(
     limit: int = typer.Option(10, "--limit", "-n"),
+    severity: str = typer.Option(None, "--severity", "-s", help="Filter by severity (CRITICAL, HIGH, MEDIUM, LOW)."),
+    path: str = typer.Option(None, "--path", "-p", help="Filter by file path."),
     json: bool = typer.Option(False, "--json", help="Machine-readable output."),
 ):
     """Show recent findings from the live API."""
+    params = {"limit": limit}
+    if severity:
+        params["severity"] = severity
+    if path:
+        params["path"] = path
     try:
-        d = _api_get("/findings/", params={"limit": limit})
+        d = _api_get("/findings/", params=params)
     except Exception as e:  # noqa: BLE001
         _die_unreachable(e)
 
@@ -141,8 +148,8 @@ def findings(
     for f in lst:
         sev = f.get("severity", "")
         c = SEV_COLOR.get(sev, "white")
-        path = f.get("path", "")
-        path_str = f"[cyan]{path}[/cyan]" if "ai" in path else f"[dim]{path}[/dim]"
+        row_path = f.get("path", "")
+        path_str = f"[cyan]{row_path}[/cyan]" if "ai" in row_path else f"[dim]{row_path}[/dim]"
         t.add_row(
             f.get("id", "")[:17], f"[{c}]{sev}[/{c}]", path_str,
             f.get("agent", "—") or "—",

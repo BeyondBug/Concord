@@ -139,9 +139,19 @@ class SQLiteStore:
     def list_findings(self, limit: int = 50, severity: str | None = None,
                   path: str | None = None) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
+        clauses, params = [], []
+        if severity:
+            clauses.append("severity = ?")
+            params.append(severity.upper())
+        if path:
+            clauses.append("path = ?")
+            params.append(path)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        params.append(limit)
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM findings ORDER BY row_id DESC LIMIT ?", (limit,)
+                f"SELECT * FROM findings{where} ORDER BY row_id DESC LIMIT ?",
+                params,
             ).fetchall()
         return [self._finding_row_to_dict(r) for r in rows]
 
