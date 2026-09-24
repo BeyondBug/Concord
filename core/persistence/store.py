@@ -136,7 +136,8 @@ class SQLiteStore:
                 ),
             )
 
-    def list_findings(self, limit: int = 50) -> list[dict[str, Any]]:
+    def list_findings(self, limit: int = 50, severity: str | None = None,
+                  path: str | None = None) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
         with self._lock:
             rows = self._conn.execute(
