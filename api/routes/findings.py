@@ -49,7 +49,7 @@ store = _StoreAdapter()
 async def list_findings(limit: int = 50, severity: str | None = None,
                         path: str | None = None):
     return {
-        "findings": store.all(limit, severity=severity, path=path),
+        "findings": store.list_findings(limit, severity=severity, path=path),
         "stats": store.stats(),
         "llm_provider": os.getenv("LLM_PROVIDER", "ollama"),
         "filters": {"severity": severity, "path": path},
