@@ -1,11 +1,6 @@
 """
 api/routes/findings.py
 Findings REST API backed by the persistent store (core.persistence).
-
-``store`` is kept as a thin adapter with the historical method names
-(``add``/``get``/``all``/``stats``) so existing callers such as
-api/routes/scan.py keep working, but every call now reads and writes the
-durable SQLite-backed store instead of an in-memory list.
 """
 import os
 
@@ -32,8 +27,9 @@ class _StoreAdapter:
             result=result,
         ))
 
-    def all(self, limit: int = 50) -> list:
-        return get_store().list_findings(limit=limit)
+    def all(self, limit: int = 50, severity: str | None = None,
+            path: str | None = None) -> list:
+        return get_store().list_findings(limit=limit, severity=severity, path=path)
 
     def get(self, finding_id: str) -> dict | None:
         return get_store().get_finding(finding_id)
@@ -49,7 +45,7 @@ store = _StoreAdapter()
 async def list_findings(limit: int = 50, severity: str | None = None,
                         path: str | None = None):
     return {
-        "findings": store.list_findings(limit, severity=severity, path=path),
+        "findings": store.all(limit, severity=severity, path=path),
         "stats": store.stats(),
         "llm_provider": os.getenv("LLM_PROVIDER", "ollama"),
         "filters": {"severity": severity, "path": path},
