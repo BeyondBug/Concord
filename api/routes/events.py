@@ -98,14 +98,25 @@ async def approve_finding(finding_id: str, agent: str):
         raise HTTPException(status_code=404, detail=f"Finding {finding_id!r} not found")
 
     result = record.get("result", {})
+
+    # Validate agent is one of the candidates that actually ran
+    candidate_agents = result.get("agents", {})
+    if candidate_agents and agent not in candidate_agents:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent {agent!r} is not a candidate for finding {finding_id!r}. "
+                   f"Valid agents: {list(candidate_agents.keys())}",
+        )
+
     result["approved_by"] = agent
     result["auto_resolved"] = True
     persisted = store.update_finding_result(finding_id, result)
 
+    # Audit reason format must match: "human_approved:{agent}" (no space)
     store.add_audit(AuditRecord(
         finding_id=finding_id,
         path=record.get("path", ""),
-        reason=f"human_approved: agent={agent}",
+        reason=f"human_approved:{agent}",
         agent=agent,
     ))
 
@@ -137,7 +148,7 @@ async def reject_finding(finding_id: str, reason: str = "rejected"):
     store.add_audit(AuditRecord(
         finding_id=finding_id,
         path=record.get("path", ""),
-        reason=f"human_rejected: {reason}",
+        reason=f"human_rejected:{reason}",
         agent=None,
     ))
 
@@ -175,7 +186,7 @@ async def expire_old_approvals(max_age_hours: int = 24):
             store.add_audit(AuditRecord(
                 finding_id=finding_id,
                 path=record.get("path", ""),
-                reason=f"approval_expired: older than {max_age_hours}h",
+                reason=f"approval_expired:{max_age_hours}h",
                 agent=None,
             ))
             expired.append(finding_id)
