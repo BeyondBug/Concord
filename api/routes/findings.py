@@ -32,9 +32,8 @@ class _StoreAdapter:
             result=result,
         ))
 
-    def all(self, limit: int = 50, severity: str | None = None,
-            path: str | None = None) -> list:
-        return get_store().list_findings(limit=limit, severity=severity, path=path)
+    def all(self, limit: int = 50) -> list:
+        return get_store().list_findings(limit=limit)
 
     def get(self, finding_id: str) -> dict | None:
         return get_store().get_finding(finding_id)

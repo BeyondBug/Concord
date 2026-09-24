@@ -194,38 +194,6 @@ body{background:var(--bg);color:var(--text);
   color:var(--brand)}
 .view-empty{display:flex;flex-direction:column;align-items:center;
   justify-content:center;height:100%;color:var(--muted);gap:8px;padding:40px}
-
-/* ── Overview ── */
-.ov-wrap{flex:1;overflow:auto;padding:18px}
-.ov-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-  gap:12px;margin-bottom:16px}
-.ov-card{background:var(--surface);border:1px solid var(--border);
-  border-radius:8px;padding:16px}
-.ov-card .k{color:var(--muted);font-size:11px;text-transform:uppercase;
-  letter-spacing:.04em}
-.ov-card .v{font-size:28px;font-weight:700;color:#fff;margin-top:6px}
-.ov-card .v.sm{font-size:15px;font-weight:600}
-.ov-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media(max-width:760px){.ov-row{grid-template-columns:1fr}}
-.ov-panel{background:var(--surface);border:1px solid var(--border);
-  border-radius:8px;padding:14px 16px}
-.ov-panel h3{font-size:12px;color:var(--muted);text-transform:uppercase;
-  letter-spacing:.04em;margin-bottom:10px}
-.ov-line{display:flex;justify-content:space-between;align-items:center;
-  padding:6px 0;border-bottom:1px solid var(--surface2);font-size:12px}
-.ov-line:last-child{border-bottom:none}
-.ov-dot{display:inline-block;width:8px;height:8px;border-radius:50%;
-  margin-right:7px}
-.ov-dot.g{background:var(--green)}.ov-dot.d{background:var(--muted);opacity:.4}
-
-/* ── Security severity bars ── */
-.sev-row{display:flex;align-items:center;gap:12px;margin:10px 0}
-.sev-lbl{width:110px;font-size:12px;font-weight:600}
-.sev-bar-wrap{flex:1;height:22px;background:var(--surface2);border-radius:4px;
-  overflow:hidden}
-.sev-bar{height:100%;border-radius:4px;transition:width .4s ease;min-width:2px}
-.sev-n{width:44px;text-align:right;font-family:'SF Mono',monospace;
-  font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -234,16 +202,12 @@ body{background:var(--bg);color:var(--text);
 <header class="hdr">
   <div class="logo"><div class="pulse"></div>Concord</div>
   <div class="hdr-mid">
-    <div class="tabs">
-      <button class="tab active" data-view="overview" onclick="switchView('overview')">Overview</button>
-      <button class="tab" data-view="findings" onclick="switchView('findings')">Findings</button>
-      <button class="tab" data-view="incidents" onclick="switchView('incidents')">Incidents</button>
-      <button class="tab" data-view="security" onclick="switchView('security')">Security</button>
+    <span class="hdr-desc">AI DevSecOps Orchestration Platform</span>
+    <div class="tabs" style="margin-left:8px">
+      <button class="tab active" data-view="findings" onclick="switchView('findings')">Findings</button>
       <button class="tab" data-view="approvals" onclick="switchView('approvals')">Approvals<span class="cnt" id="tab-approvals-cnt"></span></button>
       <button class="tab" data-view="audit" onclick="switchView('audit')">Audit</button>
-      <button class="tab" data-view="settings" onclick="switchView('settings')">Settings</button>
     </div>
-    <span class="hdr-desc" style="margin-left:4px">AI DevSecOps Orchestration Platform</span>
     <span id="scan-status-text" style="font-size:11px;color:var(--muted)"></span>
   </div>
   <div class="hdr-right">
@@ -328,7 +292,7 @@ body{background:var(--bg);color:var(--text);
   </div>
 
   <!-- ── Main ── -->
-  <div class="main" id="view-findings" data-view="findings" style="display:none">
+  <div class="main" id="view-findings" data-view="findings">
 
     <!-- Findings list -->
     <div class="f-panel">
@@ -384,41 +348,6 @@ body{background:var(--bg);color:var(--text);
         <span class="p-live"><span class="live-dot"></span> live</span>
       </div>
       <div class="tbl-wrap" id="audit-body">
-        <div class="view-empty">Loading…</div>
-      </div>
-    </div>
-  </div>
-  <!-- ── Security view ── -->
-  <div class="main" id="view-security" data-view="security" style="display:none">
-    <div class="f-panel" style="flex:1">
-      <div class="p-hdr">
-        <span class="p-title">Security — severity distribution</span>
-        <span class="p-live"><span class="live-dot"></span> live</span>
-      </div>
-      <div class="tbl-wrap" id="security-body">
-        <div class="view-empty">Loading…</div>
-      </div>
-    </div>
-  </div>
-  <!-- ── Settings view ── -->
-  <div class="main" id="view-settings" data-view="settings" style="display:none">
-    <div class="f-panel" style="flex:1">
-      <div class="p-hdr">
-        <span class="p-title">Settings — system configuration (read-only)</span>
-      </div>
-      <div class="tbl-wrap" id="settings-body">
-        <div class="view-empty">Loading…</div>
-      </div>
-    </div>
-  </div>
-  <!-- ── Incidents view ── -->
-  <div class="main" id="view-incidents" data-view="incidents" style="display:none">
-    <div class="f-panel" style="flex:1">
-      <div class="p-hdr">
-        <span class="p-title">Incidents — findings grouped by affected resource</span>
-        <span class="p-live"><span class="live-dot"></span> live</span>
-      </div>
-      <div class="tbl-wrap" id="incidents-body">
         <div class="view-empty">Loading…</div>
       </div>
     </div>
@@ -665,172 +594,20 @@ async function approveFinding(findingId, agent) {
   }
 }
 
-async function rejectFinding(findingId) {
-  const btns = document.querySelectorAll('.approve-btn');
-  btns.forEach(b => b.disabled = true);
-  try {
-    const r = await fetch(`/events/findings/${findingId}/reject`, {method:'POST'});
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    toast('✕ Finding rejected', 'ok', 3000);
-    loadApprovals();
-    refresh();
-  } catch(e) {
-    toast('Reject failed: ' + e.message, 'err', 4000);
-    btns.forEach(b => b.disabled = false);
-  }
-}
-
 // ── View switching + new data views ────────────────────────────
 
-let currentView = 'overview';
+let currentView = 'findings';
 
 function switchView(v){
   currentView = v;
   document.querySelectorAll('.tab').forEach(t =>
     t.classList.toggle('active', t.dataset.view === v));
-  ['overview','findings','incidents','security','approvals','audit','settings'].forEach(name => {
+  ['findings','approvals','audit'].forEach(name => {
     const el = document.getElementById('view-'+name);
     if (el) el.style.display = (name === v) ? 'flex' : 'none';
   });
-  if (v === 'overview') loadOverview();
-  if (v === 'incidents') loadIncidents();
-  if (v === 'security') loadSecurity();
   if (v === 'audit') loadAudit();
   if (v === 'approvals') loadApprovals();
-  if (v === 'settings') loadSettings();
-}
-
-async function loadIncidents(){
-  const box = document.getElementById('incidents-body');
-  try {
-    const d = await fetch('/findings/incidents').then(r=>r.json());
-    const inc = d.incidents || [];
-    if (!inc.length){
-      box.innerHTML = '<div class="view-empty">No incidents yet. '+
-        'Findings grouped by affected resource will appear here.</div>';
-      return;
-    }
-    const colors = {CRITICAL:'var(--red)',HIGH:'var(--orange)',
-                    MEDIUM:'var(--yellow)',LOW:'var(--green)',
-                    INFORMATIONAL:'var(--muted)'};
-    let rows = '';
-    for (const i of inc){
-      const c = colors[i.max_severity] || 'var(--muted)';
-      const unres = i.unresolved > 0
-        ? `<span style="color:var(--yellow)">${i.unresolved} open</span>`
-        : '<span style="color:var(--green)">resolved</span>';
-      rows += `<tr>`+
-        `<td class="mono">${esc((i.artifact||'').split('/').pop())}</td>`+
-        `<td style="color:${c}">${esc(i.max_severity)}</td>`+
-        `<td>${i.count}</td>`+
-        `<td>${unres}</td>`+
-        `<td class="mono">${esc((i.last_seen||'').slice(0,19))}</td></tr>`;
-    }
-    box.innerHTML = `<table class="dtbl"><thead><tr>`+
-      `<th>Resource</th><th>Max severity</th><th>Findings</th>`+
-      `<th>Status</th><th>Last seen</th>`+
-      `</tr></thead><tbody>${rows}</tbody></table>`;
-  } catch(e){
-    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
-  }
-}
-
-async function loadSettings(){
-  const box = document.getElementById('settings-body');
-  try {
-    const [h, v, f] = await Promise.all([
-      fetch('/health').then(r=>r.json()),
-      fetch('/version').then(r=>r.json()),
-      fetch('/findings/').then(r=>r.json()),
-    ]);
-    const rows = [
-      ['Service', v.service||'concord'],
-      ['Version', v.version||'—'],
-      ['API status', h.status||'—'],
-      ['Authentication', h.auth_enforced ? 'enforced (API key set)' : 'open dev mode (no key)'],
-      ['LLM provider', f.llm_provider||'—'],
-    ];
-    let html = '<div style="max-width:560px"><table class="dtbl"><tbody>';
-    for (const [k,val] of rows){
-      html += `<tr><td style="color:var(--muted);width:180px">${esc(k)}</td>`+
-        `<td class="mono">${esc(val)}</td></tr>`;
-    }
-    html += '</tbody></table>'+
-      '<div style="margin-top:14px;color:var(--muted);font-size:11px;line-height:1.6">'+
-      'These values are read from the live API. Configuration is managed via '+
-      'environment variables (see <span class="mono">.env.example</span>); '+
-      'secrets are never displayed here.</div></div>';
-    box.innerHTML = html;
-  } catch(e){
-    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
-  }
-}
-
-async function loadSecurity(){
-  const box = document.getElementById('security-body');
-  try {
-    const d = await fetch('/findings/severity').then(r=>r.json());
-    const bd = d.by_severity || {};
-    const order = ['CRITICAL','HIGH','MEDIUM','LOW','INFORMATIONAL'];
-    const colors = {CRITICAL:'var(--red)',HIGH:'var(--orange)',
-                    MEDIUM:'var(--yellow)',LOW:'var(--green)',
-                    INFORMATIONAL:'var(--muted)'};
-    const total = Object.values(bd).reduce((a,b)=>a+b,0);
-    if (!total){
-      box.innerHTML = '<div class="view-empty">No findings yet. '+
-        'Run a scan or <strong>invoke</strong> to populate.</div>';
-      return;
-    }
-    let html = '<div style="max-width:640px">';
-    for (const sev of order){
-      const n = bd[sev] || 0;
-      const pct = total ? Math.round(n/total*100) : 0;
-      html += `<div class="sev-row">`+
-        `<div class="sev-lbl" style="color:${colors[sev]}">${sev}</div>`+
-        `<div class="sev-bar-wrap"><div class="sev-bar" `+
-        `style="width:${pct}%;background:${colors[sev]}"></div></div>`+
-        `<div class="sev-n">${n}</div></div>`;
-    }
-    html += `<div style="margin-top:14px;color:var(--muted);font-size:12px">`+
-      `Total findings: <strong style="color:#fff">${total}</strong></div></div>`;
-    box.innerHTML = html;
-  } catch(e){
-    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
-  }
-}
-
-async function loadOverview(){
-  try {
-    const [fr, pr, ar, hr, ag] = await Promise.all([
-      fetch('/findings/').then(r=>r.json()),
-      fetch('/events/approvals/pending').then(r=>r.json()),
-      fetch('/audit/?limit=100').then(r=>r.json()),
-      fetch('/health').then(r=>r.json()),
-      fetch('/agents/').then(r=>r.json()),
-    ]);
-    const s = fr.stats||{};
-    document.getElementById('ov-total').textContent   = s.total||0;
-    document.getElementById('ov-fast').textContent    = s.fast||0;
-    document.getElementById('ov-ai').textContent      = s.ai||0;
-    document.getElementById('ov-pending').textContent = pr.total||0;
-    document.getElementById('ov-api').textContent  = hr.status||'—';
-    document.getElementById('ov-auth').textContent = hr.auth_enforced ? 'enforced' : 'open (dev)';
-    document.getElementById('ov-llm').textContent  = fr.llm_provider||'—';
-    document.getElementById('ov-audit-n').textContent = ar.total||0;
-
-    const box = document.getElementById('ov-agents');
-    if (box && ag.agents){
-      box.innerHTML = ag.agents.map(a => {
-        const dot = a.status === 'active' ? 'g' : 'd';
-        const rel = (a.reliability!=null) ? a.reliability.toFixed(2) : '';
-        const tail = a.status === 'active'
-          ? `${esc(a.backing)} · ${rel}`
-          : `${esc(a.backing)} · planned`;
-        return `<div class="ov-line"><span><span class="ov-dot ${dot}"></span>`+
-          `${esc(a.domain)}</span><span class="mono">${tail}</span></div>`;
-      }).join('');
-    }
-  } catch(e){ /* offline; leave placeholders */ }
 }
 
 function esc(s){
@@ -856,11 +633,8 @@ async function loadApprovals(){
     for (const f of pending){
       const agents = Object.keys((f.result||{}).agents||{});
       const btns = agents.map(a =>
-        `<button class="approve-btn" onclick="approveFinding(${esc(JSON.stringify(f.id))},${esc(JSON.stringify(a))})">`+
-        `✓ ${esc(a)}</button>`).join(' ') +
-        ` <button class="approve-btn" style="background:var(--surface2);`+
-        `border:1px solid var(--red);color:var(--red)" `+
-        `onclick="rejectFinding(${esc(JSON.stringify(f.id))})">✕ reject</button>`;
+        `<button class="approve-btn" onclick="approveFinding('${esc(f.id)}','${esc(a)}')">`+
+        `✓ ${esc(a)}</button>`).join(' ');
       rows += `<tr><td class="mono">${esc(f.id)}</td>`+
         `<td>${esc(f.severity)}</td>`+
         `<td class="mono">${esc((f.artifact||'').split('/').pop())}</td>`+
@@ -926,9 +700,6 @@ async function refresh() {
     // Keep the approvals count badge and the active auxiliary view live.
     if (currentView === 'audit') loadAudit();
     else if (currentView === 'approvals') loadApprovals();
-    else if (currentView === 'security') loadSecurity();
-    else if (currentView === 'incidents') loadIncidents();
-    else if (currentView === 'overview') { loadOverview(); refreshApprovalsCount(); }
     else refreshApprovalsCount();
   } catch(e) {
     document.getElementById('status-pill').textContent = '● Offline';
