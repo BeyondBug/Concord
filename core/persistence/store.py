@@ -137,7 +137,7 @@ class SQLiteStore:
             )
 
     def list_findings(self, limit: int = 50, severity: str | None = None,
-                      path: str | None = None) -> list[dict[str, Any]]:
+                  path: str | None = None) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
         clauses, params = [], []
         if severity:
