@@ -323,12 +323,19 @@ class SourceCodeScanner:
             logger.info("SourceCodeScanner: path does not exist: %s", directory)
             return results
 
-        files = [
-            p for p in root.rglob("*")
-            if p.is_file()
-            and p.suffix in self.LANG_BY_EXT
-            and not any(skip in p.parts for skip in self._SKIP_DIRS)
-        ]
+        files = (
+            [root]
+            if root.is_file()
+            and root.suffix in self.LANG_BY_EXT
+            and not any(skip in root.parts for skip in self._SKIP_DIRS)
+            else [
+                p for p in root.rglob("*")
+                if p.is_file()
+                and p.suffix in self.LANG_BY_EXT
+                and not any(skip in p.parts for skip in self._SKIP_DIRS)
+            ]
+        )
+        
         if not files:
             logger.info("SourceCodeScanner: no source files under %s", directory)
             return results

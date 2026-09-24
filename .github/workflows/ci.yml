@@ -6,14 +6,34 @@ on:
   pull_request:
     branches: [main, develop]
 
+# Least privilege: this workflow only needs to read the repo.
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r requirements/dev.txt
-      - run: ruff check .
-      - run: pytest tests/unit -v --tb=short
+          cache: pip
+          cache-dependency-path: requirements/dev.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements/dev.txt "psycopg[binary,pool]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test (full suite, excluding slow)
+        env:
+          CONCORD_DB_PATH: ":memory:"
+        run: pytest tests/ -q -m "not slow"
