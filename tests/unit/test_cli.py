@@ -189,3 +189,95 @@ def test_completion_help():
     result = runner.invoke(cli.app, ["completion"])
     assert result.exit_code == 0
     assert "install-completion" in result.stdout
+
+def _http_error(code, detail):
+    req = httpx.Request("GET", "http://x/")
+    resp = httpx.Response(code, json={"detail": detail}, request=req)
+    return httpx.HTTPStatusError(str(code), request=req, response=resp)
+
+
+def test_http_error_is_not_reported_as_unreachable(monkeypatch):
+    # Regression: a 401/404 used to print "Cannot reach API" with exit 2.
+    def _raise(*a, **k):
+        raise _http_error(401, "Invalid API key.")
+    monkeypatch.setattr(cli, "_api_get", _raise)
+    result = runner.invoke(cli.app, ["findings"])
+    assert result.exit_code == 1
+    assert "Cannot reach" not in result.output
+    assert "CONCORD_API_KEY" in result.output
+
+
+def test_reject_conflict_exit_code(monkeypatch):
+    def _raise(*a, **k):
+        raise _http_error(409, "Finding 'X' is not awaiting a decision (already rejected).")
+    monkeypatch.setattr(cli, "_api_post", _raise)
+    result = runner.invoke(cli.app, ["reject", "X"])
+    assert result.exit_code == 1
+    assert "already rejected" in result.output
+
+
+def test_agents_shows_blocked_reason(monkeypatch):
+    payload = {"agents": [
+        {"domain": "kubernetes", "backing": "kagent (MCP)", "reliability": 0.82,
+         "status": "blocked", "detail": "kagent MCP unreachable at http://x"},
+    ], "active": 0, "blocked": 1}
+    monkeypatch.setattr(cli, "_api_get", lambda *a, **k: payload)
+    result = runner.invoke(cli.app, ["agents"])
+    assert result.exit_code == 0
+    assert "blocked" in result.stdout and "unreachable" in result.stdout
+
+
+def test_scan_waits_until_done(monkeypatch):
+    monkeypatch.setattr(cli.time, "sleep", lambda s: None)
+    monkeypatch.setattr(cli, "_api_post",
+                        lambda *a, **k: {"status": "scanning", "message": "Scanning…"})
+    states = iter([
+        {"status": "scanning", "message": "Running agents…"},
+        {"status": "done", "target": "crms-devops/crms", "finding_id": "CRMS-abc",
+         "commit": "abc", "total": 7, "severity": "HIGH", "needs_approval": True,
+         "by_scanner": {"terraform": 3, "kubernetes": 4}},
+    ])
+    monkeypatch.setattr(cli, "_api_get", lambda *a, **k: next(states))
+    result = runner.invoke(cli.app, ["scan"])
+    assert result.exit_code == 0
+    assert "CRMS-abc" in result.stdout and "7 violation" in result.stdout
+
+
+def test_scan_error_exit_code(monkeypatch):
+    monkeypatch.setattr(cli, "_api_post",
+                        lambda *a, **k: {"status": "error", "error": "git clone failed"})
+    result = runner.invoke(cli.app, ["scan"])
+    assert result.exit_code == 1
+    assert "git clone failed" in result.stdout
+
+
+def test_finding_detail(monkeypatch):
+    payload = {"finding": {"id": "F1", "severity": "HIGH", "path": "ai_path",
+                           "repo": "r", "artifact": "a",
+                           "result": {"auto_resolved": False,
+                                      "analyses": {"infra": {"score": 0.736,
+                                                             "root_cause": "wildcard IAM",
+                                                             "suggested_fix": "scope it"}},
+                                      "skipped_agents": {"kubernetes": "blocked: x"}}},
+               "timeline": [{"timestamp": "2026-09-25T10:00:00+00:00", "path": "ai_path",
+                             "reason": "human_tiebreak", "agent": "infra",
+                             "correlation_id": "rid"}]}
+    monkeypatch.setattr(cli, "_api_get", lambda *a, **k: payload)
+    result = runner.invoke(cli.app, ["finding", "F1"])
+    assert result.exit_code == 0
+    for text in ("wildcard IAM", "needs approval", "skipped kubernetes", "human_tiebreak"):
+        assert text in result.stdout
+
+
+def test_diagnostics_healthy_ignores_optional_checks(monkeypatch):
+    # Regression: `healthy` filtered on a shadowed loop variable.
+    def _get(path, params=None):
+        if path == "/agents/":
+            return {"agents": [{"domain": "kubernetes", "status": "blocked",
+                                "detail": "no connector"}]}
+        return {"status": "ok", "auth_enforced": False}
+    monkeypatch.setattr(cli, "_api_get", _get)
+    result = runner.invoke(cli.app, ["diagnostics", "--json"])
+    d = json.loads(result.stdout)
+    assert d["healthy"] is True
+    assert any(c["name"] == "Agent kubernetes" and not c["ok"] for c in d["checks"])
