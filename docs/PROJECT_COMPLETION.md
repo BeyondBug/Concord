@@ -1,5 +1,68 @@
 # Concord — Project Completion Tracker
 
+Honest status as of **2026-09-25** (branch `feat/premium-ui-completion`).
+DONE = implemented and verified by tests **and** a live run; PARTIAL = works
+with a stated gap; BLOCKED = needs something outside this machine's current
+state. Evidence and bug list: `docs/AUDIT.md`.
+
+## Verification (final run)
+
+| Check | Result |
+|---|---|
+| `ruff check .` | All checks passed |
+| `CONCORD_DB_PATH=:memory: pytest tests/ -q -m "not slow"` | **194 passed**, 3 deselected (baseline: 142) |
+| `pytest -m slow` | 1 passed (Postgres fallback), 2 skipped (live kagent / HolmesGPT not running) |
+| `pytest tests/integration/test_e2e.py` (Friday gate) | 1 passed — real flow, no longer a placeholder |
+| `python -m compileall api core agents concord_cli` | ok |
+| `helm lint helm/concord` / `helm template` | 0 failed; Deployment, Service, ServiceAccount |
+| `docker build .` | **not run** — Docker daemon not running on this machine |
+| Live API (uvicorn) + curl of every dashboard endpoint | all 200 (`/health`, `/version`, `/findings/`, `/findings/severity`, `/findings/incidents`, `/findings/{id}/detail`, `/events/approvals/pending`, `/audit/`, `/agents/`, `/events/scan-status`, `/`) |
+| Live CLI smoke | `health agents scan findings finding approvals approve reject audit stats diagnostics invoke` — expected output and exit codes (409/404/422 → exit 1 with reason) |
+| Live dashboard | all 7 views render live data, no NaN times, no error toasts; scan → detail → approve verified in the browser |
+| Real scan of `crms-devops/crms` | commit `9ce9781fda5d`, 10 violations (terraform 2, kubernetes 8), tiebreak raised; re-scan deduplicated |
+
+## Status by area
+
+| Area | Status | Notes |
+|---|---|---|
+| Triage (severity, known-pattern, dedup) | DONE | dedup now shared per process (was a no-op in the API) |
+| Deterministic confidence + arbitration | DONE | unchanged formula; see open decision below |
+| Orchestrator | DONE | 5 agents concurrently, blocked/failing agents skipped with reason, candidates + analyses stored |
+| Built-in scanners (Terraform, K8s, source) | DONE | regex scanners, not TerraSecure/Trivy/Checkov |
+| Infra / CI-CD / Security agents | DONE | run the built-in scanners |
+| Kubernetes agent (kagent MCP) | **BLOCKED** | client + gating done and contract-tested; no cluster (kind missing, Docker stopped) |
+| Observability agent (HolmesGPT) | **BLOCKED** | same |
+| Repository scan | DONE | one finding per commit, audited, errors surfaced |
+| Persistence (SQLite / Postgres) | DONE / PARTIAL | Postgres code path unit-tested; not run against a live Postgres here |
+| Audit trail (correlation ids) | DONE | every decision incl. fast path, re-scans, approvals |
+| Approval workflow | DONE | pending-only state machine, 409 otherwise, GitHub issue optional |
+| API validation, schemas, errors | DONE | query bounds, response models, JSON 500 with request id |
+| Auth (API key) | DONE | demo endpoint now protected |
+| MCP transport security | DONE | https by default; http needs explicit opt-in |
+| CLI | DONE | verified live |
+| Dashboard | DONE | verified live |
+| Docker image | PARTIAL | `git` added, context trimmed; build not run (daemon down) |
+| Helm chart | PARTIAL | lint/template pass; not deployed |
+| TerraSecure / Trivy / Checkov MCP connectors | NOT STARTED | declared in `tools.yaml`, not called |
+| `infra/` Terraform modules | STUB | placeholders |
+
+## Known limitations
+
+- kagent / HolmesGPT never run live here. To finish: `docs/AGENTS_SETUP.md` §3.
+- With the current reliabilities every multi-agent AI-path finding is a
+  tiebreak (gap 0.04 × severity < 0.15), and agents that found nothing still
+  compete in arbitration. Changing either is an arbitration decision for the
+  team (CLAUDE.md), not made here.
+- Scan state is per process (a restart forgets the last scan; findings and
+  audit are durable).
+- Windows: refused loopback connections take ~2 s, so the first `/agents/`
+  call after start is slow; later calls use the cached probe.
+
+---
+
+## History (previous sessions, kept for reference)
+
+
 This is the canonical, **honest** implementation tracker. It reflects the actual
 audited state of the repository, not aspirational completion. Statuses are:
 

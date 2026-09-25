@@ -16,6 +16,11 @@ RUN pip install -r requirements/base.txt
 # ── Runtime stage ────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
+# git: the scan route clones/updates the target repository.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/*
+
 # Run as an unprivileged user, never root.
 RUN groupadd --system concord \
     && useradd --system --gid concord --home /app --shell /usr/sbin/nologin concord

@@ -275,3 +275,19 @@ def test_scan_clone_failure_is_reported(client, scan_repo, monkeypatch, tmp_path
 def test_scan_rejects_concurrent_trigger(client, scan_repo):
     scan_repo._scan_state.status = "scanning"
     assert client.post("/events/scan-crms").status_code == 409
+
+
+def test_scanners_accept_a_single_file_target():
+    # Regression: rglob() on a file path yields nothing, so single-file
+    # artifacts (webhook findings) were always reported as clean.
+    from core.scanner import TerraformScanner
+    tf = TerraformScanner().scan("tests/fixtures/terraform/main.tf")
+    assert any(f.check_id == "CKV_AWS_1" for f in tf)
+    assert TerraformScanner().scan("README.md") == []
+
+
+def test_source_scanner_single_file(tmp_path):
+    from core.scanner import SourceCodeScanner
+    f = tmp_path / "app.py"
+    f.write_text("import os\nos.system(cmd)\n")
+    assert [x.check_id for x in SourceCodeScanner().scan(str(f))] == ["CONCORD_OS_SYSTEM"]

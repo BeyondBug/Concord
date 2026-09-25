@@ -16,6 +16,17 @@ logger = logging.getLogger("concord.scanner")
 MAX_CHECKS = 50
 
 
+def _collect(target: Path, suffixes: tuple[str, ...]) -> list[Path]:
+    """Files to scan under ``target`` — which may itself be a single file.
+
+    (``Path.rglob`` on a file yields nothing, so a finding whose artifact is
+    one file — every webhook finding — used to scan nothing at all.)
+    """
+    if target.is_file():
+        return [target] if target.suffix in suffixes else []
+    return [p for p in target.rglob("*") if p.suffix in suffixes and p.is_file()]
+
+
 @dataclass
 class Finding:
     check_id:    str
@@ -92,7 +103,7 @@ class TerraformScanner:
     def scan(self, directory: str) -> list[Finding]:
         results = []
         d = Path(directory)
-        tf_files = list(d.rglob("*.tf"))
+        tf_files = _collect(d, (".tf",))
 
         if not tf_files:
             logger.info("No .tf files found in %s", directory)
@@ -195,7 +206,7 @@ class KubernetesScanner:
         d = Path(directory)
 
         # Scan both .yaml and .yml
-        yaml_files = list(d.rglob("*.yaml")) + list(d.rglob("*.yml"))
+        yaml_files = _collect(d, (".yaml", ".yml"))
         # Exclude non-k8s files
         yaml_files = [f for f in yaml_files
                       if not any(x in str(f) for x in
@@ -383,7 +394,7 @@ class SourceCodeScanner:
             return results
 
         files = [
-            p for p in root.rglob("*")
+            p for p in _collect(root, tuple(self.LANG_BY_EXT))
             if p.is_file()
             and p.suffix in self.LANG_BY_EXT
             and not any(skip in p.parts for skip in self._SKIP_DIRS)
