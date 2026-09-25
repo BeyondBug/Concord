@@ -291,3 +291,13 @@ def test_source_scanner_single_file(tmp_path):
     f = tmp_path / "app.py"
     f.write_text("import os\nos.system(cmd)\n")
     assert [x.check_id for x in SourceCodeScanner().scan(str(f))] == ["CONCORD_OS_SYSTEM"]
+
+
+def test_unsafe_inbound_request_id_is_replaced(client):
+    # Inbound X-Request-ID is echoed into logs and the audit trail, so only
+    # short, plain ids are trusted; anything else gets a generated id.
+    r = client.get("/health", headers={"X-Request-ID": "bad id<script>"})
+    assert r.headers["X-Request-ID"] != "bad id<script>"
+    assert len(r.headers["X-Request-ID"]) == 16
+    ok = client.get("/health", headers={"X-Request-ID": "trace-1.a:b"})
+    assert ok.headers["X-Request-ID"] == "trace-1.a:b"
