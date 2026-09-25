@@ -358,7 +358,7 @@ async def _run_scan() -> None:
         state.message = "Scanning…"
         pre = await asyncio.to_thread(prescan, local)
         finding = Finding(
-            id=fid, source="concord-scanner", artifact=str(local),
+            id=fid, source="concord-scanner", artifact=local.as_posix(),
             severity=pre["severity"],
             title=f"{target['name']} scan: {pre['total']} violation(s)",
             description=(f"Scan of {target['name']} at {commit[:12]}: "

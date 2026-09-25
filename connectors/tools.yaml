@@ -6,7 +6,7 @@ version: "1.0"
 
 connectors:
   # NOTE: terrasecure, trivy and checkov are declared for the Phase 2 MCP swap
-  # but not called yet — InfraAgent/CICDAgent run the built-in pattern
+  # but not called yet â€” InfraAgent/CICDAgent run the built-in pattern
   # scanners in core/scanner.py (see docs/PROJECT_COMPLETION.md).
   - name: terrasecure
     type: mcp
@@ -42,24 +42,27 @@ connectors:
       - scan_terraform
       - scan_kubernetes
 
-  # kagent (Phase 2A) � controller MCP endpoint, port-forwarded from the
+  # kagent (Phase 2A) — controller MCP endpoint, port-forwarded from the
   # cluster: kubectl -n kagent port-forward svc/kagent-controller 8083:8083
+  # (127.0.0.1, not localhost: on Windows localhost tries ::1 first and each
+  # refused attempt costs ~2s during status probes.)
   # kagent's controller does no auth of its own, so no token is sent. Plaintext
   # http:// to localhost needs CONCORD_ALLOW_INSECURE_TRANSPORT=1 (dev only).
   # Setup: docs/AGENTS_SETUP.md
   - name: kagent
     type: mcp
-    url: http://localhost:8083/mcp
+    url: http://127.0.0.1:8083/mcp
     auth: none
     agent: kubernetes
     timeout_seconds: 300   # local LLM tool-calling runs are slow
     capabilities: [list_agents, invoke_agent]
 
-  # HolmesGPT (Phase 2B) � REST API (it is not an MCP server), port-forwarded:
-  # kubectl -n holmes port-forward svc/holmesgpt-holmes 8080:80
+  # HolmesGPT (Phase 2B) — REST API (it is not an MCP server), port-forwarded:
+  # kubectl -n holmes port-forward svc/holmesgpt-holmes 5050:80
+  # (local 5050 = HolmesGPT's default port; 8080 is often taken on dev boxes.)
   - name: holmesgpt
     type: http
-    url: http://localhost:8080
+    url: http://127.0.0.1:5050
     auth: none
     agent: observability
     timeout_seconds: 300

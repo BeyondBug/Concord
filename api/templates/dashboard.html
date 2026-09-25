@@ -3,950 +3,856 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Concord — AI DevSecOps Platform</title>
+<title>Concord</title>
+<meta name="description" content="Concord — AI DevSecOps orchestration dashboard">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%231C9C76'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%230D0D0F'/%3E%3C/svg%3E">
 <style>
 :root{
-  --bg:#0D0D0F;--surface:#141417;--surface2:#1C1C22;--border:#2A2A32;
-  --brand:#1C9C76;--brand-dim:rgba(28,156,118,.12);--text:#E4E3DF;--muted:#6B6A6F;
-  --red:#EF4444;--orange:#F97316;--yellow:#EAB308;--green:#22C55E;--blue:#3B82F6;
+  --bg:#0c0d10;--surface:#131419;--surface-2:#1a1c22;--surface-3:#22242c;
+  --border:#2a2d36;--border-strong:#3a3e4a;
+  --text:#e6e6e3;--text-2:#a9a9b0;--muted:#74747d;
+  --brand:#1fa37b;--brand-2:#2cc592;--brand-bg:rgba(31,163,123,.12);
+  --crit:#f0525a;--high:#f58a3c;--med:#e5b83a;--low:#46c47e;--info:#8b8b94;
+  --crit-bg:rgba(240,82,90,.13);--high-bg:rgba(245,138,60,.13);
+  --med-bg:rgba(229,184,58,.13);--low-bg:rgba(70,196,126,.13);--info-bg:rgba(139,139,148,.13);
+  --blue:#5b9cf5;--blue-bg:rgba(91,156,245,.13);
+  --focus:0 0 0 2px var(--bg),0 0 0 4px var(--brand-2);
+  --r:8px;--r-sm:5px;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;--s6:32px;
+  --mono:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace;
+  color-scheme:dark;
 }
 *{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
 body{background:var(--bg);color:var(--text);
-  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-  font-size:13px;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  font:13px/1.5 system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  display:flex;flex-direction:column;overflow:hidden}
+button{font:inherit;color:inherit}
+:focus-visible{outline:none;box-shadow:var(--focus);border-radius:var(--r-sm)}
+.mono{font-family:var(--mono);font-size:12px}
+.muted{color:var(--muted)}.dim{color:var(--text-2)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
 
-/* ── Header ── */
-.hdr{display:flex;align-items:center;justify-content:space-between;
-  padding:0 18px;height:52px;border-bottom:1px solid var(--border);
-  background:var(--surface);flex-shrink:0;gap:12px}
-.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;color:#fff;flex-shrink:0}
-.pulse{width:9px;height:9px;border-radius:50%;background:var(--brand);animation:pulse 2s infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-.hdr-mid{flex:1;display:flex;align-items:center;gap:10px;min-width:0;overflow:hidden}
-.hdr-desc{font-size:12px;color:var(--muted);white-space:nowrap;flex-shrink:0}
-.tabs{flex-shrink:0}
-@media(max-width:1100px){.hdr-desc{display:none}}
-.hdr-right{display:flex;gap:7px;align-items:center;flex-shrink:0}
-.pill{background:var(--surface2);border:1px solid var(--border);border-radius:4px;
-  padding:2px 9px;font-size:11px;color:var(--muted);white-space:nowrap}
+/* ── Header ─────────────────────────────── */
+.hdr{display:flex;align-items:center;gap:var(--s4);padding:0 var(--s4);
+  height:52px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0}
+.logo{display:flex;align-items:center;gap:var(--s2);font-weight:700;font-size:15px;
+  letter-spacing:.01em;flex-shrink:0}
+.logo-dot{width:10px;height:10px;border-radius:50%;background:var(--brand);
+  box-shadow:0 0 0 3px var(--brand-bg)}
+.tabs{display:flex;gap:2px;min-width:0;overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab{background:none;border:0;color:var(--text-2);padding:6px 10px;border-radius:var(--r-sm);
+  cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px}
+.tab:hover{color:var(--text);background:var(--surface-2)}
+.tab[aria-selected="true"]{color:#fff;background:var(--brand-bg);
+  box-shadow:inset 0 0 0 1px rgba(31,163,123,.45)}
+.badge{min-width:18px;height:18px;padding:0 5px;border-radius:9px;font-size:11px;
+  font-weight:700;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--med-bg);color:var(--med)}
+.badge:empty{display:none}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:var(--s2);flex-shrink:0}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);
+  background:var(--surface-2);border-radius:999px;padding:2px 10px;font-size:12px;
+  color:var(--text-2);white-space:nowrap}
+.pill .d{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.pill.ok .d{background:var(--low)}.pill.bad .d{background:var(--crit)}
+.pill.warn .d{background:var(--med)}
+.btn{border:1px solid var(--border-strong);background:var(--surface-2);color:var(--text);
+  border-radius:var(--r-sm);padding:6px 12px;cursor:pointer;font-weight:600;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover:not(:disabled){background:var(--surface-3)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+.btn.primary:hover:not(:disabled){background:var(--brand-2)}
+.btn.danger{color:var(--crit);border-color:rgba(240,82,90,.45)}
+.btn.danger:hover:not(:disabled){background:var(--crit-bg)}
+.btn.sm{padding:3px 9px;font-size:12px}
+.spin{width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;
+  border-radius:50%;animation:spin .8s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (max-width:980px){.hdr-right .pill.hide-sm{display:none}}
 
-/* Scan button */
-.scan-btn{background:var(--brand);color:#fff;border:none;border-radius:6px;
-  padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;
-  display:flex;align-items:center;gap:6px;transition:opacity .15s;white-space:nowrap}
-.scan-btn:hover{opacity:.85}
-.scan-btn:disabled{opacity:.45;cursor:not-allowed}
-.scan-btn.scanning{background:#D98E04}
-#scan-status-text{font-size:11px;color:var(--muted)}
+/* ── Banners ─────────────────────────────── */
+.banner{display:none;align-items:center;gap:var(--s3);padding:var(--s2) var(--s4);
+  border-bottom:1px solid var(--border);font-size:13px;flex-shrink:0}
+.banner.show{display:flex}
+.banner.err{background:var(--crit-bg);color:#ffd7d9}
+.banner.warn{background:var(--med-bg);color:#f7e6b8}
+.banner input{background:var(--bg);border:1px solid var(--border-strong);color:var(--text);
+  border-radius:var(--r-sm);padding:5px 8px;width:260px;font-family:var(--mono)}
 
-/* ── Layout ── */
-.layout{display:flex;flex:1;overflow:hidden}
+/* ── Layout ─────────────────────────────── */
+.layout{display:flex;flex:1;min-height:0}
+.side{width:232px;flex-shrink:0;border-right:1px solid var(--border);background:var(--surface);
+  overflow-y:auto;padding:var(--s4) var(--s3);display:flex;flex-direction:column;gap:var(--s5)}
+@media (max-width:860px){.side{display:none}}
+.side h2,.section-title{font-size:11px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--muted);margin-bottom:var(--s2)}
+.agent{display:flex;gap:var(--s2);align-items:flex-start;padding:6px var(--s2);
+  border-radius:var(--r-sm)}
+.agent+.agent{margin-top:2px}
+.agent .d{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0}
+.agent.active .d{background:var(--low)}.agent.blocked .d{background:var(--crit)}
+.agent .n{font-weight:600}
+.agent .s{font-size:12px;color:var(--muted);line-height:1.4;word-break:break-word}
+.agent.blocked .n{color:var(--text-2)}
+.kvs{display:grid;grid-template-columns:auto 1fr;gap:4px var(--s3);font-size:13px}
+.kvs dt{color:var(--muted)}.kvs dd{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+.scanbox{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);
+  padding:var(--s3);font-size:12px;color:var(--text-2);line-height:1.6;word-break:break-word}
+.scanbox b{color:var(--text)}
 
-/* ── Sidebar ── */
-.sidebar{width:210px;border-right:1px solid var(--border);padding:14px 12px;
-  overflow-y:auto;flex-shrink:0;background:var(--surface)}
-.sec{margin-bottom:18px}
-.sec-lbl{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--muted);margin-bottom:8px}
-.agent{display:flex;flex-direction:column;padding:7px 9px;border-radius:6px;
-  margin-bottom:3px;border:1px solid transparent}
-.agent.on{background:var(--brand-dim);border-color:rgba(28,156,118,.2)}
-.agent.off{opacity:.38}
-.agent-name{display:flex;align-items:center;gap:7px;font-weight:600;font-size:12px}
-.agent-sub{font-size:10px;color:var(--muted);margin-top:2px;margin-left:16px}
-.dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
-.dot-g{background:var(--green)}.dot-d{background:#3A3A42}
-.stat{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
-.sv{font-weight:700;color:var(--brand)}
-
-/* Last scan info box */
-.scan-info{background:var(--surface2);border:1px solid var(--border);border-radius:6px;
-  padding:10px;font-size:11px;color:var(--muted);line-height:1.7}
-.scan-info strong{color:var(--text)}
-
-/* ── Main ── */
-.main{flex:1;display:flex;overflow:hidden}
-
-/* ── Findings list ── */
-.f-panel{width:340px;border-right:1px solid var(--border);
-  display:flex;flex-direction:column;flex-shrink:0}
-.p-hdr{display:flex;align-items:center;justify-content:space-between;
-  padding:10px 14px;border-bottom:1px solid var(--border);background:var(--surface)}
-.p-title{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.p-live{font-size:10px;color:var(--muted);display:flex;align-items:center;gap:4px}
-.live-dot{width:5px;height:5px;border-radius:50%;background:var(--brand);animation:pulse 2s infinite}
-.f-list{flex:1;overflow-y:auto;padding:6px}
-
-.fi{padding:10px 12px;border-radius:6px;margin-bottom:3px;cursor:pointer;
-  border:1px solid transparent;transition:all .12s}
-.fi:hover{background:var(--surface2);border-color:var(--border)}
-.fi.sel{background:var(--brand-dim);border-color:var(--brand)}
-.fi.real{border-left:3px solid var(--brand)}
-.fi-top{display:flex;align-items:center;gap:7px;margin-bottom:3px}
-.fi-id{font-family:monospace;font-size:11px;font-weight:600;color:#fff;
-  flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.fi-time{font-size:10px;color:var(--muted);white-space:nowrap}
-.fi-meta{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--muted)}
-.fi-repo{font-size:10px;color:var(--brand);margin-left:auto}
-
-.sev{font-size:10px;font-weight:700;padding:1px 6px;border-radius:3px;white-space:nowrap}
-.sev-CRITICAL{background:rgba(239,68,68,.15);color:#EF4444}
-.sev-HIGH{background:rgba(249,115,22,.15);color:#F97316}
-.sev-MEDIUM{background:rgba(234,179,8,.15);color:#EAB308}
-.sev-LOW{background:rgba(34,197,94,.15);color:#22C55E}
-
-.pbadge{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700}
-.pbadge-fast{background:rgba(107,107,111,.18);color:var(--muted)}
-.pbadge-ai{background:rgba(28,156,118,.15);color:var(--brand)}
-.real-badge{font-size:9px;padding:1px 5px;border-radius:3px;font-weight:700;
-  background:rgba(59,130,246,.15);color:#60A5FA}
-
-.empty{text-align:center;color:var(--muted);padding:40px 16px;font-size:12px;line-height:1.9}
-
-/* ── Detail panel ── */
-.d-panel{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.d-body{flex:1;overflow-y:auto;padding:18px 20px}
-
-.sec-h{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;
-  color:var(--muted);margin-bottom:8px;margin-top:18px}
-.sec-h:first-child{margin-top:0}
-.kv{display:grid;grid-template-columns:115px 1fr;gap:5px 10px;margin-bottom:4px}
-.kk{color:var(--muted);font-size:11px;padding-top:1px}
-.kv-v{font-size:12px;font-family:monospace;word-break:break-all}
-.comment-box{background:var(--surface2);border:1px solid var(--border);
-  border-radius:6px;padding:14px;font-size:12px;line-height:1.75;
-  white-space:pre-wrap;word-break:break-word;font-family:monospace}
-
-/* ── Approval section ── */
-.approval{background:rgba(234,179,8,.06);border:1px solid rgba(234,179,8,.25);
-  border-radius:8px;padding:16px;margin-top:16px}
-.approval-title{font-size:13px;font-weight:700;color:#EAB308;margin-bottom:6px;
-  display:flex;align-items:center;gap:7px}
-.approval-desc{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.6}
-.approval-agents{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.approve-card{background:var(--surface2);border:1px solid var(--border);border-radius:6px;
-  padding:12px;display:flex;flex-direction:column;gap:6px}
-.approve-card-title{font-size:11px;font-weight:700;text-transform:uppercase;
-  letter-spacing:.05em;color:var(--text)}
-.approve-card-score{font-size:10px;color:var(--muted);font-family:monospace}
-.approve-card-detail{font-size:10px;color:var(--muted);line-height:1.5;
-  max-height:60px;overflow:hidden;text-overflow:ellipsis}
-.approve-btn{background:var(--brand);color:#fff;border:none;border-radius:5px;
-  padding:8px 12px;font-size:11px;font-weight:700;cursor:pointer;
-  margin-top:4px;transition:opacity .15s;width:100%}
-.approve-btn:hover{opacity:.82}
-.approve-btn:disabled{opacity:.4;cursor:not-allowed}
-.approval-done{background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.25);
-  border-radius:6px;padding:12px;text-align:center;color:var(--green);
-  font-size:12px;font-weight:600}
-.approval-done a{color:var(--brand);text-decoration:none}
-.approval-done a:hover{text-decoration:underline}
-
-.github-notice{background:var(--surface2);border:1px solid var(--border);
-  border-radius:6px;padding:10px;font-size:11px;color:var(--muted);
-  margin-top:10px;line-height:1.6}
-.github-notice code{background:#222;padding:1px 5px;border-radius:3px;
-  font-family:monospace;font-size:10px;color:var(--text)}
-
-/* tag */
-.tag-auto{color:var(--green);font-weight:700}
-.tag-human{color:#EAB308;font-weight:700}
-.tag-fast{color:var(--muted)}
-
-::-webkit-scrollbar{width:4px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-
-.toast{position:fixed;bottom:20px;right:20px;padding:10px 16px;border-radius:6px;
-  font-size:12px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;z-index:100}
-.toast.ok{background:var(--brand);color:#fff}
-.toast.err{background:#EF4444;color:#fff}
-.toast.show{opacity:1}
-
-/* ── View tabs ── */
-.tabs{display:flex;gap:2px;align-items:center}
-.tab{background:none;border:none;color:var(--muted);font-size:12px;
-  padding:6px 12px;border-radius:5px;cursor:pointer;font-family:inherit;
-  transition:background .12s,color .12s}
-.tab:hover{color:var(--text);background:var(--surface2)}
-.tab.active{color:#fff;background:var(--brand-dim);
-  box-shadow:inset 0 0 0 1px var(--brand)}
-.tab .cnt{color:var(--muted);font-size:10px;margin-left:5px}
+.main{flex:1;min-width:0;display:flex;flex-direction:column}
 .view{display:none;flex:1;min-height:0}
 .view.active{display:flex}
+.pane{flex:1;min-width:0;overflow:auto;padding:var(--s5)}
+.pane-hdr{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s4);flex-wrap:wrap}
+.pane-hdr h1{font-size:16px;font-weight:650}
+.pane-hdr .sub{color:var(--muted);font-size:12px}
+.pane-hdr .grow{flex:1}
 
-/* ── Data tables (audit / approvals) ── */
-.tbl-wrap{flex:1;overflow:auto;padding:14px 18px}
-.dtbl{width:100%;border-collapse:collapse;font-size:12px}
-.dtbl th{text-align:left;color:var(--muted);font-weight:600;
-  padding:7px 10px;border-bottom:1px solid var(--border);
-  position:sticky;top:0;background:var(--bg);white-space:nowrap}
-.dtbl td{padding:7px 10px;border-bottom:1px solid var(--surface2);
-  vertical-align:top}
-.dtbl tr:hover td{background:var(--surface)}
-.mono{font-family:'SF Mono',Menlo,Consolas,monospace;font-size:11px;
-  color:var(--muted)}
-.chip{display:inline-block;padding:1px 7px;border-radius:4px;font-size:10px;
-  background:var(--surface2);border:1px solid var(--border)}
-.chip.ai{color:var(--blue)}.chip.fast{color:var(--green)}
-.rid{font-family:'SF Mono',Menlo,Consolas,monospace;font-size:10px;
-  color:var(--brand)}
-.view-empty{display:flex;flex-direction:column;align-items:center;
-  justify-content:center;height:100%;color:var(--muted);gap:8px;padding:40px}
+/* ── Cards / stats ─────────────────────── */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:var(--s3);
+  margin-bottom:var(--s5)}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:var(--s4)}
+.stat .k{color:var(--muted);font-size:12px}
+.stat .v{font-size:28px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+.stat.attn .v{color:var(--med)}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:var(--s3)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:var(--s4);min-width:0}
+.card h3{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:var(--s3)}
+.row{display:flex;justify-content:space-between;gap:var(--s3);padding:7px 0;
+  border-bottom:1px solid var(--surface-2)}
+.row:last-child{border-bottom:0}
+.row .r{color:var(--text-2);text-align:right;min-width:0;overflow-wrap:anywhere}
 
-/* ── Overview ── */
-.ov-wrap{flex:1;overflow:auto;padding:18px}
-.ov-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
-  gap:12px;margin-bottom:16px}
-.ov-card{background:var(--surface);border:1px solid var(--border);
-  border-radius:8px;padding:16px}
-.ov-card .k{color:var(--muted);font-size:11px;text-transform:uppercase;
-  letter-spacing:.04em}
-.ov-card .v{font-size:28px;font-weight:700;color:#fff;margin-top:6px}
-.ov-card .v.sm{font-size:15px;font-weight:600}
-.ov-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media(max-width:760px){.ov-row{grid-template-columns:1fr}}
-.ov-panel{background:var(--surface);border:1px solid var(--border);
-  border-radius:8px;padding:14px 16px}
-.ov-panel h3{font-size:12px;color:var(--muted);text-transform:uppercase;
-  letter-spacing:.04em;margin-bottom:10px}
-.ov-line{display:flex;justify-content:space-between;align-items:center;
-  padding:6px 0;border-bottom:1px solid var(--surface2);font-size:12px}
-.ov-line:last-child{border-bottom:none}
-.ov-dot{display:inline-block;width:8px;height:8px;border-radius:50%;
-  margin-right:7px}
-.ov-dot.g{background:var(--green)}.ov-dot.d{background:var(--muted);opacity:.4}
+/* ── Chips ─────────────────────────────── */
+.sev{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:4px;
+  letter-spacing:.02em;white-space:nowrap}
+.sev-CRITICAL{background:var(--crit-bg);color:var(--crit)}
+.sev-HIGH{background:var(--high-bg);color:var(--high)}
+.sev-MEDIUM{background:var(--med-bg);color:var(--med)}
+.sev-LOW{background:var(--low-bg);color:var(--low)}
+.sev-INFORMATIONAL,.sev-x{background:var(--info-bg);color:var(--info)}
+.st{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;white-space:nowrap}
+.st::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.st-pending{color:var(--med)}.st-approved,.st-auto{color:var(--low)}
+.st-rejected,.st-error{color:var(--crit)}.st-fast,.st-expired{color:var(--info)}
+.chip{display:inline-block;font-size:11px;padding:1px 7px;border-radius:4px;
+  background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);white-space:nowrap}
+.chip.ai{color:var(--blue);border-color:rgba(91,156,245,.35)}
 
-/* ── Security severity bars ── */
-.sev-row{display:flex;align-items:center;gap:12px;margin:10px 0}
-.sev-lbl{width:110px;font-size:12px;font-weight:600}
-.sev-bar-wrap{flex:1;height:22px;background:var(--surface2);border-radius:4px;
-  overflow:hidden}
-.sev-bar{height:100%;border-radius:4px;transition:width .4s ease;min-width:2px}
-.sev-n{width:44px;text-align:right;font-family:'SF Mono',monospace;
-  font-size:12px;color:var(--muted)}
+/* ── Findings split view ───────────────── */
+.split{display:flex;flex:1;min-width:0}
+.list{width:380px;flex-shrink:0;border-right:1px solid var(--border);display:flex;
+  flex-direction:column;min-height:0}
+@media (max-width:1100px){.list{width:320px}}
+.list-tools{display:flex;gap:var(--s2);padding:var(--s3);border-bottom:1px solid var(--border)}
+.list-tools input,.list-tools select{background:var(--surface-2);border:1px solid var(--border);
+  color:var(--text);border-radius:var(--r-sm);padding:5px 8px;min-width:0}
+.list-tools input{flex:1}
+.items{flex:1;overflow-y:auto;padding:var(--s2)}
+.item{display:block;width:100%;text-align:left;background:none;border:1px solid transparent;
+  border-radius:var(--r-sm);padding:var(--s2) var(--s3);cursor:pointer}
+.item+.item{margin-top:2px}
+.item:hover{background:var(--surface-2)}
+.item[aria-selected="true"]{background:var(--brand-bg);border-color:rgba(31,163,123,.5)}
+.item .t1{display:flex;align-items:center;gap:var(--s2)}
+.item .id{font-family:var(--mono);font-size:12px;font-weight:600;flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .when{font-size:12px;color:var(--muted);white-space:nowrap}
+.item .t2{display:flex;align-items:center;gap:var(--s2);margin-top:4px;font-size:12px;
+  color:var(--muted);min-width:0}
+.item .t2 .art{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+.detail{flex:1;min-width:0;overflow-y:auto;padding:var(--s5)}
+.dl{display:grid;grid-template-columns:130px 1fr;gap:6px var(--s4);margin-bottom:var(--s5)}
+.dl dt{color:var(--muted)}.dl dd{min-width:0;overflow-wrap:anywhere}
+.agents-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:var(--s3);
+  margin-bottom:var(--s5)}
+.acard{border:1px solid var(--border);border-radius:var(--r);background:var(--surface);
+  padding:var(--s3) var(--s4);display:flex;flex-direction:column;gap:var(--s2);min-width:0}
+.acard.win{border-color:rgba(31,163,123,.55)}
+.acard .h{display:flex;align-items:center;gap:var(--s2)}
+.acard .score{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--text-2)}
+.acard pre,.comment{white-space:pre-wrap;word-break:break-word;font-family:var(--mono);
+  font-size:12px;line-height:1.55;color:var(--text-2);max-height:220px;overflow:auto}
+.comment{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);
+  padding:var(--s3) var(--s4);max-height:none;margin-bottom:var(--s5)}
+.decision{border:1px solid rgba(229,184,58,.4);background:rgba(229,184,58,.06);
+  border-radius:var(--r);padding:var(--s4);margin-bottom:var(--s5)}
+.decision h3{color:var(--med);font-size:14px;margin-bottom:var(--s1)}
+.decision p{color:var(--text-2);margin-bottom:var(--s3)}
+.decision .acts{display:flex;flex-wrap:wrap;gap:var(--s2)}
+.resolved{border:1px solid rgba(70,196,126,.35);background:var(--low-bg);border-radius:var(--r);
+  padding:var(--s3) var(--s4);margin-bottom:var(--s5);color:#c9f0d9}
+.resolved.rej{border-color:rgba(240,82,90,.4);background:var(--crit-bg);color:#ffd7d9}
+.resolved a{color:var(--brand-2)}
+.skips{list-style:none;margin-bottom:var(--s5);display:flex;flex-direction:column;gap:4px}
+.skips li{font-size:12px;color:var(--text-2)}
+.skips b{color:var(--text)}
+h2.sh{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:var(--s2)}
+
+/* ── Tables ────────────────────────────── */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;color:var(--muted);font-weight:600;font-size:12px;padding:8px 10px;
+  border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);white-space:nowrap}
+.tbl td{padding:8px 10px;border-bottom:1px solid var(--surface-2);vertical-align:top}
+.tbl tr.click{cursor:pointer}
+.tbl tr.click:hover td{background:var(--surface)}
+.tbl .num{text-align:right;font-variant-numeric:tabular-nums}
+.tbl-wrap{border:1px solid var(--border);border-radius:var(--r);overflow:auto;max-height:100%}
+.tbl .acts{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ── Severity bars ─────────────────────── */
+.bar-row{display:grid;grid-template-columns:120px 1fr 56px;gap:var(--s3);align-items:center;
+  margin:var(--s2) 0}
+.bar{height:22px;background:var(--surface-2);border-radius:4px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px}
+
+/* ── Empty / loading ───────────────────── */
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;gap:var(--s2);color:var(--muted);padding:var(--s6) var(--s4);min-height:220px}
+.empty .big{font-size:28px;opacity:.35}
+.empty b{color:var(--text)}
+.skel{background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));
+  background-size:200% 100%;animation:sk 1.2s infinite;border-radius:4px;height:14px}
+@keyframes sk{to{background-position:-200% 0}}
+
+.toast{position:fixed;right:var(--s4);bottom:var(--s4);max-width:420px;padding:10px 14px;
+  border-radius:var(--r);font-weight:600;font-size:13px;opacity:0;transform:translateY(8px);
+  transition:opacity .2s,transform .2s;pointer-events:none;z-index:50;
+  box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.toast.show{opacity:1;transform:none}
+.toast.ok{background:#15372b;color:#c9f0d9;border:1px solid rgba(70,196,126,.4)}
+.toast.err{background:#3a1619;color:#ffd7d9;border:1px solid rgba(240,82,90,.45)}
+kbd{font-family:var(--mono);font-size:11px;border:1px solid var(--border-strong);
+  border-bottom-width:2px;border-radius:4px;padding:0 4px;color:var(--text-2)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+::-webkit-scrollbar-track{background:transparent}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
 <body>
 
-<!-- ── Header ── -->
 <header class="hdr">
-  <div class="logo"><div class="pulse"></div>Concord</div>
-  <div class="hdr-mid">
-    <div class="tabs">
-      <button class="tab active" data-view="overview" onclick="switchView('overview')">Overview</button>
-      <button class="tab" data-view="findings" onclick="switchView('findings')">Findings</button>
-      <button class="tab" data-view="incidents" onclick="switchView('incidents')">Incidents</button>
-      <button class="tab" data-view="security" onclick="switchView('security')">Security</button>
-      <button class="tab" data-view="approvals" onclick="switchView('approvals')">Approvals<span class="cnt" id="tab-approvals-cnt"></span></button>
-      <button class="tab" data-view="audit" onclick="switchView('audit')">Audit</button>
-      <button class="tab" data-view="settings" onclick="switchView('settings')">Settings</button>
-    </div>
-    <span class="hdr-desc" style="margin-left:4px">AI DevSecOps Orchestration Platform</span>
-    <span id="scan-status-text" style="font-size:11px;color:var(--muted)"></span>
-  </div>
+  <div class="logo"><span class="logo-dot" aria-hidden="true"></span>Concord</div>
+  <nav class="tabs" role="tablist" aria-label="Views" id="tabs"></nav>
   <div class="hdr-right">
-    <button class="scan-btn" id="scan-btn" onclick="startScan()">
-      ⟳ Scan crms-devops/crms
-    </button>
-    <span class="pill" id="llm-pill">LLM: —</span>
-    <span class="pill">v0.1.0</span>
-    <span class="pill" id="status-pill">● Connecting…</span>
+    <button class="btn primary" id="scan-btn" type="button" disabled>Scan</button>
+    <span class="pill hide-sm" id="llm-pill" title="LLM provider used for PR-comment wording">LLM —</span>
+    <span class="pill" id="api-pill" role="status"><span class="d"></span><span>Connecting…</span></span>
   </div>
 </header>
 
+<div class="banner err" id="auth-banner" role="alert">
+  <span>This server requires an API key.</span>
+  <form id="key-form" style="display:flex;gap:8px;align-items:center">
+    <label class="sr-only" for="key-input">API key</label>
+    <input id="key-input" type="password" autocomplete="off" placeholder="CONCORD_API_KEY">
+    <button class="btn sm primary" type="submit">Use key</button>
+  </form>
+  <span class="dim" style="font-size:12px">Kept in this browser tab only (sessionStorage).</span>
+</div>
+<div class="banner err" id="down-banner" role="alert"></div>
+
 <div class="layout">
-
-  <!-- ── Sidebar ── -->
-  <aside class="sidebar">
-    <div class="sec">
-      <div class="sec-lbl">Agents</div>
-      <div class="agent on">
-        <div class="agent-name"><div class="dot dot-g"></div>Infra Agent</div>
-        <div class="agent-sub">Pattern scanner · 0.92</div>
-      </div>
-      <div class="agent on">
-        <div class="agent-name"><div class="dot dot-g"></div>CI/CD Agent</div>
-        <div class="agent-sub">Trivy · Checkov · 0.88</div>
-      </div>
-      <div class="agent on">
-        <div class="agent-name"><div class="dot dot-g"></div>Security Agent</div>
-        <div class="agent-sub">Source scan · 0.85</div>
-      </div>
-      <div class="agent off">
-        <div class="agent-name"><div class="dot dot-d"></div>Kubernetes</div>
-        <div class="agent-sub">kagent (MCP) · planned</div>
-      </div>
-      <div class="agent off">
-        <div class="agent-name"><div class="dot dot-d"></div>Observability</div>
-        <div class="agent-sub">HolmesGPT (MCP) · planned</div>
-      </div>
-    </div>
-
-    <div class="sec">
-      <div class="sec-lbl">Stats</div>
-      <div class="stat"><span style="color:var(--muted)">Total</span><span class="sv" id="s-total">0</span></div>
-      <div class="stat"><span style="color:var(--muted)">Fast path</span><span class="sv" id="s-fast">0</span></div>
-      <div class="stat"><span style="color:var(--muted)">AI path</span><span class="sv" id="s-ai">0</span></div>
-      <div class="stat"><span style="color:var(--muted)">Tiebreaks</span><span class="sv" id="s-tie">0</span></div>
-    </div>
-
-    <div class="sec">
-      <div class="sec-lbl">Last Scan</div>
-      <div class="scan-info" id="scan-info">
-        No scan yet.<br>Click <strong>Scan crms-devops/crms</strong> above.
-      </div>
-    </div>
+  <aside class="side" aria-label="Status">
+    <section><h2>Agents</h2><div id="side-agents"><div class="skel"></div></div></section>
+    <section><h2>Findings</h2>
+      <dl class="kvs" id="side-stats">
+        <dt>Total</dt><dd>—</dd><dt>Fast path</dt><dd>—</dd>
+        <dt>AI path</dt><dd>—</dd><dt>Awaiting decision</dt><dd>—</dd>
+      </dl>
+    </section>
+    <section><h2>Last scan</h2><div class="scanbox" id="side-scan">—</div></section>
+    <section class="muted" style="font-size:12px;margin-top:auto">
+      Keys: <kbd>1</kbd>–<kbd>7</kbd> views · <kbd>j</kbd>/<kbd>k</kbd> move ·
+      <kbd>/</kbd> filter · <kbd>r</kbd> refresh
+    </section>
   </aside>
 
-  <!-- ── Overview view ── -->
-  <div class="main" id="view-overview" data-view="overview" style="flex:1">
-    <div class="ov-wrap">
-      <div class="ov-grid" id="ov-stats">
-        <div class="ov-card"><div class="k">Total findings</div><div class="v" id="ov-total">0</div></div>
-        <div class="ov-card"><div class="k">Fast path</div><div class="v" id="ov-fast">0</div></div>
-        <div class="ov-card"><div class="k">AI path</div><div class="v" id="ov-ai">0</div></div>
-        <div class="ov-card"><div class="k">Awaiting approval</div><div class="v" id="ov-pending">0</div></div>
-      </div>
-      <div class="ov-row">
-        <div class="ov-panel">
-          <h3>Agents</h3>
-          <div id="ov-agents">
-            <div class="ov-line"><span class="mono" style="color:var(--muted)">loading…</span></div>
+  <main class="main" id="main">
+    <section class="view" id="view-overview" role="tabpanel" aria-labelledby="tab-overview"></section>
+    <section class="view" id="view-findings" role="tabpanel" aria-labelledby="tab-findings">
+      <div class="split">
+        <div class="list">
+          <div class="list-tools">
+            <label class="sr-only" for="f-filter">Filter findings</label>
+            <input id="f-filter" type="search" placeholder="Filter by id, repo, artifact…">
+            <label class="sr-only" for="f-status">Status</label>
+            <select id="f-status">
+              <option value="">All</option><option value="pending">Awaiting decision</option>
+              <option value="resolved">Resolved</option><option value="fast">Fast path</option>
+            </select>
           </div>
+          <div class="items" id="f-items" role="listbox" aria-label="Findings"></div>
         </div>
-        <div class="ov-panel">
-          <h3>System</h3>
-          <div class="ov-line"><span>API</span><span id="ov-api" class="mono">—</span></div>
-          <div class="ov-line"><span>Auth</span><span id="ov-auth" class="mono">—</span></div>
-          <div class="ov-line"><span>LLM provider</span><span id="ov-llm" class="mono">—</span></div>
-          <div class="ov-line"><span>Recent audit events</span><span id="ov-audit-n" class="mono">0</span></div>
-        </div>
+        <div class="detail" id="f-detail" aria-live="polite"></div>
       </div>
-    </div>
-  </div>
-
-  <!-- ── Main ── -->
-  <div class="main" id="view-findings" data-view="findings" style="display:none">
-
-    <!-- Findings list -->
-    <div class="f-panel">
-      <div class="p-hdr">
-        <span class="p-title">Findings</span>
-        <span class="p-live"><span class="live-dot"></span> live</span>
-      </div>
-      <div class="f-list" id="f-list">
-        <div class="empty">
-          No findings yet.<br><br>
-          Click <strong>Scan crms-devops/crms</strong> in the header<br>
-          to run a real scan and see results here.
-        </div>
-      </div>
-    </div>
-
-    <!-- Detail panel -->
-    <div class="d-panel">
-      <div class="p-hdr">
-        <span class="p-title">Finding Detail</span>
-        <span id="detail-repo" style="font-size:11px;color:var(--brand)"></span>
-      </div>
-      <div class="d-body" id="d-body">
-        <div style="display:flex;flex-direction:column;align-items:center;
-                    justify-content:center;height:100%;color:var(--muted);gap:10px">
-          <div style="font-size:32px;opacity:.2">◎</div>
-          <div>Select a finding to see details</div>
-          <div style="font-size:11px">or click Scan crms-devops/crms to start</div>
-        </div>
-      </div>
-    </div>
-
-  </div>
-
-  <!-- ── Approvals view ── -->
-  <div class="main" id="view-approvals" data-view="approvals" style="display:none">
-    <div class="f-panel" style="flex:1">
-      <div class="p-hdr">
-        <span class="p-title">Pending Approvals</span>
-        <span class="p-live"><span class="live-dot"></span> live</span>
-      </div>
-      <div class="tbl-wrap" id="approvals-body">
-        <div class="view-empty">Loading…</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── Audit view ── -->
-  <div class="main" id="view-audit" data-view="audit" style="display:none">
-    <div class="f-panel" style="flex:1">
-      <div class="p-hdr">
-        <span class="p-title">Audit Trail</span>
-        <span class="p-live"><span class="live-dot"></span> live</span>
-      </div>
-      <div class="tbl-wrap" id="audit-body">
-        <div class="view-empty">Loading…</div>
-      </div>
-    </div>
-  </div>
-  <!-- ── Security view ── -->
-  <div class="main" id="view-security" data-view="security" style="display:none">
-    <div class="f-panel" style="flex:1">
-      <div class="p-hdr">
-        <span class="p-title">Security — severity distribution</span>
-        <span class="p-live"><span class="live-dot"></span> live</span>
-      </div>
-      <div class="tbl-wrap" id="security-body">
-        <div class="view-empty">Loading…</div>
-      </div>
-    </div>
-  </div>
-  <!-- ── Settings view ── -->
-  <div class="main" id="view-settings" data-view="settings" style="display:none">
-    <div class="f-panel" style="flex:1">
-      <div class="p-hdr">
-        <span class="p-title">Settings — system configuration (read-only)</span>
-      </div>
-      <div class="tbl-wrap" id="settings-body">
-        <div class="view-empty">Loading…</div>
-      </div>
-    </div>
-  </div>
-  <!-- ── Incidents view ── -->
-  <div class="main" id="view-incidents" data-view="incidents" style="display:none">
-    <div class="f-panel" style="flex:1">
-      <div class="p-hdr">
-        <span class="p-title">Incidents — findings grouped by affected resource</span>
-        <span class="p-live"><span class="live-dot"></span> live</span>
-      </div>
-      <div class="tbl-wrap" id="incidents-body">
-        <div class="view-empty">Loading…</div>
-      </div>
-    </div>
-  </div>
-
+    </section>
+    <section class="view" id="view-approvals" role="tabpanel" aria-labelledby="tab-approvals"></section>
+    <section class="view" id="view-incidents" role="tabpanel" aria-labelledby="tab-incidents"></section>
+    <section class="view" id="view-security" role="tabpanel" aria-labelledby="tab-security"></section>
+    <section class="view" id="view-audit" role="tabpanel" aria-labelledby="tab-audit"></section>
+    <section class="view" id="view-settings" role="tabpanel" aria-labelledby="tab-settings"></section>
+  </main>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script>
-let sel = null, findings = [], scanPolling = null;
+'use strict';
+// Every value on this page comes from the live API. Nothing is hardcoded or
+// simulated; when the API has no data the views say so.
 
-const toast = (msg, type='ok', ms=3000) => {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.className = `toast ${type} show`;
-  setTimeout(() => el.classList.remove('show'), ms);
+const VIEWS = [
+  ['overview', 'Overview'], ['findings', 'Findings'], ['approvals', 'Approvals'],
+  ['incidents', 'Incidents'], ['security', 'Security'], ['audit', 'Audit'],
+  ['settings', 'Settings'],
+];
+const SEV_ORDER = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL'];
+const AGENT_NAME = {infra: 'Infra', cicd: 'CI/CD', security: 'Security',
+  kubernetes: 'Kubernetes', observability: 'Observability'};
+const agentName = d => AGENT_NAME[d] || d;
+const SEV_VAR = {CRITICAL:'--crit', HIGH:'--high', MEDIUM:'--med', LOW:'--low', INFORMATIONAL:'--info'};
+const POLL_MS = 5000;
+
+const S = {             // one snapshot shared by every view
+  view: 'overview', selected: null, loaded: false, online: null, needKey: false,
+  findings: [], stats: null, pending: [], agents: null, scan: null, health: null,
+  version: null, llm: null, detail: {}, audit: null, incidents: null, severity: null,
+  busy: new Set(),
 };
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const sevChip = s => {
+  const k = SEV_ORDER.includes(s) ? s : 'x';
+  return `<span class="sev sev-${k}">${esc(s || '?')}</span>`;
+};
+const lastPart = p => String(p || '').replace(/\\/g, '/').split('/').filter(Boolean).pop() || '—';
 
-const sevCls = s => 'sev-' + (s||'LOW').toUpperCase();
-
+// ── Time: ISO strings from the API already carry an offset (+00:00) ─────
+function parseTs(ts) {
+  if (!ts) return null;
+  const hasZone = /([zZ]|[+-]\d\d:?\d\d)$/.test(ts);
+  const d = new Date(hasZone ? ts : ts + 'Z');     // naive values are UTC
+  return isNaN(d) ? null : d;
+}
 function ago(ts) {
-  if (!ts) return '';
-  const d = (Date.now() - new Date(ts+'Z').getTime()) / 1000;
-  if (d < 60) return Math.round(d)+'s';
-  if (d < 3600) return Math.round(d/60)+'m';
-  return Math.round(d/3600)+'h';
+  const d = parseTs(ts); if (!d) return '—';
+  const s = Math.max(0, (Date.now() - d.getTime()) / 1000);
+  if (s < 45) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + 'm ago';
+  if (s < 86400) return Math.round(s / 3600) + 'h ago';
+  return Math.round(s / 86400) + 'd ago';
 }
+function fullTime(ts) {
+  const d = parseTs(ts);
+  return d ? d.toLocaleString(undefined, {dateStyle: 'medium', timeStyle: 'medium'}) : '—';
+}
+const timeEl = ts => `<time datetime="${esc(ts)}" title="${esc(fullTime(ts))}">${esc(ago(ts))}</time>`;
 
-// ── Scan CRMS ──────────────────────────────────────────────────
+// ── Finding status (single definition used by every view) ─────────────
+function status(f) {
+  const r = (f && f.result) || {};
+  if (r.approved_by) return {k: 'approved', label: 'Approved · ' + r.approved_by};
+  if (r.rejected) return {k: 'rejected', label: 'Rejected'};
+  if (r.expired) return {k: 'expired', label: 'Expired'};
+  if (r.error) return {k: 'error', label: 'No agent result'};
+  if (r.auto_resolved === false) return {k: 'pending', label: 'Awaiting decision'};
+  if (r.auto_resolved === true) return {k: 'auto', label: 'Auto-resolved'};
+  return {k: 'fast', label: 'Fast path'};
+}
+const statusChip = f => { const s = status(f); return `<span class="st st-${s.k}">${esc(s.label)}</span>`; };
 
-async function startScan() {
-  const btn = document.getElementById('scan-btn');
-  btn.disabled = true;
-  btn.textContent = '⟳ Scanning…';
-  btn.classList.add('scanning');
-  document.getElementById('scan-status-text').textContent = 'Cloning and scanning crms-devops/crms…';
-  document.getElementById('scan-info').innerHTML = '<strong>Scanning…</strong><br>Cloning crms-devops/crms and running real security checks.';
-  toast('Scan started — this takes 10-30 seconds', 'ok', 5000);
-
-  try {
-    await fetch('/events/scan-crms', { method: 'POST' });
-  } catch(e) {
-    toast('Could not start scan: ' + e.message, 'err');
-    resetScanBtn();
-    return;
+// ── API ────────────────────────────────────────────────────────────────
+function apiKey() { try { return sessionStorage.getItem('concord.key') || ''; } catch { return ''; } }
+class ApiError extends Error { constructor(status, detail) { super(detail); this.status = status; } }
+async function api(path, opts = {}) {
+  const headers = Object.assign({}, opts.headers || {});
+  const key = apiKey(); if (key) headers['X-API-Key'] = key;
+  let r;
+  try { r = await fetch(path, Object.assign({}, opts, {headers})); }
+  catch (e) { throw new ApiError(0, 'API unreachable'); }
+  let body = null;
+  try { body = await r.json(); } catch { /* non-JSON */ }
+  if (!r.ok) {
+    let detail = body && body.detail;
+    if (Array.isArray(detail)) detail = detail.map(d => d.msg).join('; ');
+    throw new ApiError(r.status, detail || ('HTTP ' + r.status));
   }
-
-  // Poll for completion
-  scanPolling = setInterval(async () => {
-    try {
-      const r = await fetch('/events/scan-status');
-      const s = await r.json();
-
-      if (s.status === 'done') {
-        clearInterval(scanPolling);
-        const total = s.total || 0;
-        const sev   = s.severity || 'LOW';
-        document.getElementById('scan-status-text').textContent =
-          `Last scan: ${total} violation(s) found (${sev})`;
-        document.getElementById('scan-info').innerHTML =
-          `<strong>${total} violation(s)</strong> — ${sev}<br>` +
-          `Auto-resolved: ${s.auto_resolved ? 'Yes' : s.needs_approval ? '<span style="color:#EAB308">Needs approval</span>' : '—'}<br>` +
-          `Finding: <code>${s.finding_id || '—'}</code>`;
-        resetScanBtn();
-        await refresh();
-        // Auto-select the CRMS finding
-        const crms = findings.find(f => f.repo === 'crms-devops/crms');
-        if (crms) pick(crms.id);
-        toast(`Scan complete: ${total} real violation(s) found`, 'ok', 4000);
-
-      } else if (s.status === 'error') {
-        clearInterval(scanPolling);
-        toast('Scan error: ' + (s.error || 'unknown'), 'err', 5000);
-        resetScanBtn();
-
-      } else {
-        document.getElementById('scan-status-text').textContent =
-          s.message || 'Scanning…';
-      }
-    } catch(e) {
-      clearInterval(scanPolling);
-      resetScanBtn();
-    }
-  }, 2000);
+  return body;
 }
 
-function resetScanBtn() {
-  const btn = document.getElementById('scan-btn');
-  btn.disabled = false;
-  btn.textContent = '⟳ Scan crms-devops/crms';
-  btn.classList.remove('scanning');
+// ── Toast ──────────────────────────────────────────────────────────────
+let toastTimer;
+function toast(msg, kind = 'ok', ms = 3500) {
+  const el = $('toast');
+  el.textContent = msg; el.className = `toast ${kind} show`;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
 
-// ── Render findings ────────────────────────────────────────────
-
-function renderList(list) {
-  const el = document.getElementById('f-list');
-  if (!list.length) {
-    el.innerHTML = '<div class="empty">No findings yet.<br><br>Click <strong>Scan crms-devops/crms</strong> in the header.</div>';
-    return;
-  }
-
-  // Sort: real CRMS findings first
-  const sorted = [...list].sort((a,b) => {
-    const aReal = a.repo === 'crms-devops/crms' ? 0 : 1;
-    const bReal = b.repo === 'crms-devops/crms' ? 0 : 1;
-    return aReal - bReal;
-  });
-
-  el.innerHTML = sorted.map(f => {
-    const isReal = f.repo === 'crms-devops/crms';
-    const path   = f.path || '';
-    return `
-      <div class="fi ${f.id===sel?'sel':''} ${isReal?'real':''}" onclick="pick('${f.id}')">
-        <div class="fi-top">
-          <span class="sev ${sevCls(f.severity)}">${f.severity||'?'}</span>
-          <span class="fi-id">${f.id}</span>
-          <span class="fi-time">${ago(f.timestamp)}</span>
-        </div>
-        <div class="fi-meta">
-          <span class="pbadge ${path==='ai_path'?'pbadge-ai':'pbadge-fast'}">${path==='ai_path'?'AI':'fast'}</span>
-          ${isReal ? '<span class="real-badge">CRMS</span>' : ''}
-          <span>${(f.artifact||'').split(/[\\/]/).pop()}</span>
-          <span class="fi-repo">${f.repo||''}</span>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-// ── Finding detail ─────────────────────────────────────────────
-
-function pick(id) {
-  sel = id;
-  const f = findings.find(x => x.id === id);
-  if (!f) return;
-  renderList(findings);
-
-  document.getElementById('detail-repo').textContent = f.repo || '';
-
-  const r   = f.result || {};
-  const isAI = r.path === 'ai_path';
-  const resClass = r.auto_resolved===true ? 'tag-auto' : r.auto_resolved===false ? 'tag-human' : 'tag-fast';
-  const resLabel = r.auto_resolved===true ? '✓ Auto-resolved' : r.auto_resolved===false ? '⚡ Human tiebreak' : '⚡ Fast path';
-  const comment  = (r.pr_comment||'').replace(/\\n/g,'\n');
-  const needsApproval = r.needs_approval && !r.approved_by;
-  const agents   = r.agents || {};
-  const agentNames = Object.keys(agents);
-
-  document.getElementById('d-body').innerHTML = `
-    <div class="sec-h">Finding</div>
-    <div class="kv">
-      <span class="kk">ID</span><span class="kv-v">${f.id}</span>
-      <span class="kk">Severity</span><span><span class="sev ${sevCls(f.severity)}">${f.severity||'?'}</span></span>
-      <span class="kk">Repository</span><span class="kv-v" style="color:var(--brand)">${f.repo||'—'}</span>
-      <span class="kk">Source</span><span class="kv-v">${f.source||'—'}</span>
-      <span class="kk">Artifact</span><span class="kv-v">${f.artifact||'—'}</span>
-      <span class="kk">Violations</span><span class="kv-v">
-        Terraform: ${r.infra_violations||'—'}  ·  K8s: ${r.cicd_violations||'—'}
-      </span>
-    </div>
-
-    ${isAI ? `
-    <div class="sec-h">Concord Analysis</div>
-    <div class="kv">
-      <span class="kk">Path</span><span class="kv-v">${r.path||'—'}</span>
-      <span class="kk">Agent</span><span class="kv-v">${r.agent||'—'}</span>
-      <span class="kk">Confidence</span><span class="kv-v">${r.score!=null?r.score.toFixed(4):'—'}</span>
-      <span class="kk">Resolution</span><span class="kv-v <span class="${resClass}">${resLabel}</span></span>
-    </div>` : `
-    <div class="sec-h">Concord Analysis</div>
-    <div class="kv">
-      <span class="kk">Path</span><span class="kv-v tag-fast">Fast path (0 violations or LOW severity)</span>
-    </div>`}
-
-    ${comment ? `
-    <div class="sec-h">PR Comment</div>
-    <div class="comment-box">${comment.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</div>` : ''}
-
-    ${needsApproval ? `
-    <div class="approval">
-      <div class="approval-title">⚡ Human Tiebreak Required</div>
-      <div class="approval-desc">
-        Two agents analyzed the CRMS repository and produced conflicting findings.<br>
-        Confidence gap is below 0.15 threshold. Choose which agent's assessment to trust.<br>
-        This will create a real GitHub issue on <strong>crms-devops/crms</strong>.
-      </div>
-      <div class="approval-agents">
-        ${agentNames.map(a => `
-          <div class="approve-card">
-            <div class="approve-card-title">${a} agent</div>
-            <div class="approve-card-score">Confidence: ${(agents[a]||0).toFixed(4)}</div>
-            <div class="approve-card-detail">${(r[a+'_root_cause']||'').split('\\n')[0]||''}</div>
-            <button class="approve-btn" onclick="approveFinding('${f.id}','${a}')">
-              ✓ Approve ${a} agent
-            </button>
-          </div>`).join('')}
-      </div>
-      <div class="github-notice">
-        💡 Approval creates a GitHub issue on crms-devops/crms.<br>
-        Requires: <code>GITHUB_TOKEN=ghp_...</code> in your <code>.env</code> file.<br>
-        Get token: <a href="https://github.com/settings/tokens" target="_blank" style="color:var(--brand)">github.com/settings/tokens</a> → repo scope
-      </div>
-    </div>` : ''}
-
-    ${r.approved_by ? `
-    <div class="approval-done">
-      ✓ Approved — ${r.approved_by} agent<br>
-      ${r.github_url ? `<a href="${r.github_url}" target="_blank">View GitHub issue →</a>` : '(set GITHUB_TOKEN to create issue)'}
-    </div>` : ''}
-  `;
-}
-
-// ── Approve finding ────────────────────────────────────────────
-
-async function approveFinding(findingId, agent) {
-  const btns = document.querySelectorAll('.approve-btn');
-  btns.forEach(b => b.disabled = true);
-  toast(`Approving ${agent} agent and creating GitHub issue…`, 'ok', 5000);
-
-  try {
-    const r   = await fetch(`/events/findings/${findingId}/approve/${agent}`, {method:'POST'});
-    const data = await r.json();
-    const url  = data.github_url;
-
-    if (url) {
-      toast(`✓ GitHub issue created!`, 'ok', 5000);
-    } else {
-      toast(data.message || 'Approved (no GitHub token)', 'ok', 4000);
-    }
-
-    // Update local state
-    const f = findings.find(x => x.id === findingId);
-    if (f && f.result) {
-      f.result.approved_by   = agent;
-      f.result.needs_approval = false;
-      f.result.github_url     = url;
-      f.result.auto_resolved  = true;
-    }
-    pick(findingId);
-  } catch(e) {
-    toast('Approval failed: ' + e.message, 'err', 5000);
-    btns.forEach(b => b.disabled = false);
-  }
-}
-
-async function rejectFinding(findingId) {
-  const btns = document.querySelectorAll('.approve-btn');
-  btns.forEach(b => b.disabled = true);
-  try {
-    const r = await fetch(`/events/findings/${findingId}/reject`, {method:'POST'});
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    toast('✕ Finding rejected', 'ok', 3000);
-    loadApprovals();
-    refresh();
-  } catch(e) {
-    toast('Reject failed: ' + e.message, 'err', 4000);
-    btns.forEach(b => b.disabled = false);
-  }
-}
-
-// ── View switching + new data views ────────────────────────────
-
-let currentView = 'overview';
-
-function switchView(v){
-  currentView = v;
-  document.querySelectorAll('.tab').forEach(t =>
-    t.classList.toggle('active', t.dataset.view === v));
-  ['overview','findings','incidents','security','approvals','audit','settings'].forEach(name => {
-    const el = document.getElementById('view-'+name);
-    if (el) el.style.display = (name === v) ? 'flex' : 'none';
-  });
-  if (v === 'overview') loadOverview();
-  if (v === 'incidents') loadIncidents();
-  if (v === 'security') loadSecurity();
-  if (v === 'audit') loadAudit();
-  if (v === 'approvals') loadApprovals();
-  if (v === 'settings') loadSettings();
-}
-
-async function loadIncidents(){
-  const box = document.getElementById('incidents-body');
-  try {
-    const d = await fetch('/findings/incidents').then(r=>r.json());
-    const inc = d.incidents || [];
-    if (!inc.length){
-      box.innerHTML = '<div class="view-empty">No incidents yet. '+
-        'Findings grouped by affected resource will appear here.</div>';
-      return;
-    }
-    const colors = {CRITICAL:'var(--red)',HIGH:'var(--orange)',
-                    MEDIUM:'var(--yellow)',LOW:'var(--green)',
-                    INFORMATIONAL:'var(--muted)'};
-    let rows = '';
-    for (const i of inc){
-      const c = colors[i.max_severity] || 'var(--muted)';
-      const unres = i.unresolved > 0
-        ? `<span style="color:var(--yellow)">${i.unresolved} open</span>`
-        : '<span style="color:var(--green)">resolved</span>';
-      rows += `<tr>`+
-        `<td class="mono">${esc((i.artifact||'').split('/').pop())}</td>`+
-        `<td style="color:${c}">${esc(i.max_severity)}</td>`+
-        `<td>${i.count}</td>`+
-        `<td>${unres}</td>`+
-        `<td class="mono">${esc((i.last_seen||'').slice(0,19))}</td></tr>`;
-    }
-    box.innerHTML = `<table class="dtbl"><thead><tr>`+
-      `<th>Resource</th><th>Max severity</th><th>Findings</th>`+
-      `<th>Status</th><th>Last seen</th>`+
-      `</tr></thead><tbody>${rows}</tbody></table>`;
-  } catch(e){
-    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
-  }
-}
-
-async function loadSettings(){
-  const box = document.getElementById('settings-body');
-  try {
-    const [h, v, f] = await Promise.all([
-      fetch('/health').then(r=>r.json()),
-      fetch('/version').then(r=>r.json()),
-      fetch('/findings/').then(r=>r.json()),
-    ]);
-    const rows = [
-      ['Service', v.service||'concord'],
-      ['Version', v.version||'—'],
-      ['API status', h.status||'—'],
-      ['Authentication', h.auth_enforced ? 'enforced (API key set)' : 'open dev mode (no key)'],
-      ['LLM provider', f.llm_provider||'—'],
-    ];
-    let html = '<div style="max-width:560px"><table class="dtbl"><tbody>';
-    for (const [k,val] of rows){
-      html += `<tr><td style="color:var(--muted);width:180px">${esc(k)}</td>`+
-        `<td class="mono">${esc(val)}</td></tr>`;
-    }
-    html += '</tbody></table>'+
-      '<div style="margin-top:14px;color:var(--muted);font-size:11px;line-height:1.6">'+
-      'These values are read from the live API. Configuration is managed via '+
-      'environment variables (see <span class="mono">.env.example</span>); '+
-      'secrets are never displayed here.</div></div>';
-    box.innerHTML = html;
-  } catch(e){
-    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
-  }
-}
-
-async function loadSecurity(){
-  const box = document.getElementById('security-body');
-  try {
-    const d = await fetch('/findings/severity').then(r=>r.json());
-    const bd = d.by_severity || {};
-    const order = ['CRITICAL','HIGH','MEDIUM','LOW','INFORMATIONAL'];
-    const colors = {CRITICAL:'var(--red)',HIGH:'var(--orange)',
-                    MEDIUM:'var(--yellow)',LOW:'var(--green)',
-                    INFORMATIONAL:'var(--muted)'};
-    const total = Object.values(bd).reduce((a,b)=>a+b,0);
-    if (!total){
-      box.innerHTML = '<div class="view-empty">No findings yet. '+
-        'Run a scan or <strong>invoke</strong> to populate.</div>';
-      return;
-    }
-    let html = '<div style="max-width:640px">';
-    for (const sev of order){
-      const n = bd[sev] || 0;
-      const pct = total ? Math.round(n/total*100) : 0;
-      html += `<div class="sev-row">`+
-        `<div class="sev-lbl" style="color:${colors[sev]}">${sev}</div>`+
-        `<div class="sev-bar-wrap"><div class="sev-bar" `+
-        `style="width:${pct}%;background:${colors[sev]}"></div></div>`+
-        `<div class="sev-n">${n}</div></div>`;
-    }
-    html += `<div style="margin-top:14px;color:var(--muted);font-size:12px">`+
-      `Total findings: <strong style="color:#fff">${total}</strong></div></div>`;
-    box.innerHTML = html;
-  } catch(e){
-    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
-  }
-}
-
-async function loadOverview(){
-  try {
-    const [fr, pr, ar, hr, ag] = await Promise.all([
-      fetch('/findings/').then(r=>r.json()),
-      fetch('/events/approvals/pending').then(r=>r.json()),
-      fetch('/audit/?limit=100').then(r=>r.json()),
-      fetch('/health').then(r=>r.json()),
-      fetch('/agents/').then(r=>r.json()),
-    ]);
-    const s = fr.stats||{};
-    document.getElementById('ov-total').textContent   = s.total||0;
-    document.getElementById('ov-fast').textContent    = s.fast||0;
-    document.getElementById('ov-ai').textContent      = s.ai||0;
-    document.getElementById('ov-pending').textContent = pr.total||0;
-    document.getElementById('ov-api').textContent  = hr.status||'—';
-    document.getElementById('ov-auth').textContent = hr.auth_enforced ? 'enforced' : 'open (dev)';
-    document.getElementById('ov-llm').textContent  = fr.llm_provider||'—';
-    document.getElementById('ov-audit-n').textContent = ar.total||0;
-
-    const box = document.getElementById('ov-agents');
-    if (box && ag.agents){
-      box.innerHTML = ag.agents.map(a => {
-        const dot = a.status === 'active' ? 'g' : 'd';
-        const rel = (a.reliability!=null) ? a.reliability.toFixed(2) : '';
-        const tail = a.status === 'active'
-          ? `${esc(a.backing)} · ${rel}`
-          : `${esc(a.backing)} · planned`;
-        return `<div class="ov-line"><span><span class="ov-dot ${dot}"></span>`+
-          `${esc(a.domain)}</span><span class="mono">${tail}</span></div>`;
-      }).join('');
-    }
-  } catch(e){ /* offline; leave placeholders */ }
-}
-
-function esc(s){
-  return String(s==null?'':s).replace(/[&<>"']/g, c =>
-    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-async function loadApprovals(){
-  const box = document.getElementById('approvals-body');
-  try {
-    const r = await fetch('/events/approvals/pending');
-    const d = await r.json();
-    const pending = d.pending || [];
-    document.getElementById('tab-approvals-cnt').textContent =
-      pending.length ? '('+pending.length+')' : '';
-    if (!pending.length){
-      box.innerHTML = '<div class="view-empty">'+
-        '<div style="font-size:28px;opacity:.2">✓</div>'+
-        'No approvals pending. Everything is resolved.</div>';
-      return;
-    }
-    let rows = '';
-    for (const f of pending){
-      const agents = Object.keys((f.result||{}).agents||{});
-      const btns = agents.map(a =>
-        `<button class="approve-btn" onclick="approveFinding('${esc(f.id)}','${esc(a)}')">`+
-        `✓ ${esc(a)}</button>`).join(' ') +
-        ` <button class="approve-btn" style="background:var(--surface2);`+
-        `border:1px solid var(--red);color:var(--red)" `+
-        `onclick="rejectFinding('${esc(f.id)}')">✕ reject</button>`;
-      rows += `<tr><td class="mono">${esc(f.id)}</td>`+
-        `<td>${esc(f.severity)}</td>`+
-        `<td class="mono">${esc((f.artifact||'').split('/').pop())}</td>`+
-        `<td>${btns}</td></tr>`;
-    }
-    box.innerHTML = `<table class="dtbl"><thead><tr>`+
-      `<th>Finding</th><th>Severity</th><th>Artifact</th><th>Approve agent</th>`+
-      `</tr></thead><tbody>${rows}</tbody></table>`;
-  } catch(e){
-    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
-  }
-}
-
-async function loadAudit(){
-  const box = document.getElementById('audit-body');
-  try {
-    const r = await fetch('/audit/?limit=100');
-    const d = await r.json();
-    const entries = d.entries || [];
-    if (!entries.length){
-      box.innerHTML = '<div class="view-empty">No audit entries yet.</div>';
-      return;
-    }
-    let rows = '';
-    for (const e of entries){
-      const pathCls = (e.path||'').includes('ai') ? 'ai' : 'fast';
-      rows += `<tr>`+
-        `<td class="mono">${esc(e.finding_id)}</td>`+
-        `<td><span class="chip ${pathCls}">${esc(e.path)}</span></td>`+
-        `<td>${esc(e.reason)}</td>`+
-        `<td>${esc(e.agent||'—')}</td>`+
-        `<td class="rid">${esc(e.correlation_id||'-')}</td>`+
-        `<td class="mono">${esc((e.timestamp||'').slice(0,19))}</td></tr>`;
-    }
-    box.innerHTML = `<table class="dtbl"><thead><tr>`+
-      `<th>Finding</th><th>Path</th><th>Reason</th><th>Agent</th>`+
-      `<th>Correlation</th><th>Time</th>`+
-      `</tr></thead><tbody>${rows}</tbody></table>`;
-  } catch(e){
-    box.innerHTML = '<div class="view-empty">Cannot reach API.</div>';
-  }
-}
-
-// ── Poll findings ──────────────────────────────────────────────
-
+// ── Data refresh ───────────────────────────────────────────────────────
+let refreshing = false;
 async function refresh() {
+  if (refreshing) return; refreshing = true;
   try {
-    const r = await fetch('/findings/');
-    const d = await r.json();
-    findings = d.findings || [];
-
-    document.getElementById('s-total').textContent = d.stats?.total||0;
-    document.getElementById('s-fast').textContent  = d.stats?.fast ||0;
-    document.getElementById('s-ai').textContent    = d.stats?.ai   ||0;
-    document.getElementById('s-tie').textContent   = d.stats?.tiebreaks||0;
-    document.getElementById('llm-pill').textContent = 'LLM: '+(d.llm_provider||'ollama');
-    document.getElementById('status-pill').innerHTML =
-      '<span style="color:var(--green)">●</span> Running';
-
-    renderList(findings);
-    if (sel) pick(sel);
-
-    // Keep the approvals count badge and the active auxiliary view live.
-    if (currentView === 'audit') loadAudit();
-    else if (currentView === 'approvals') loadApprovals();
-    else if (currentView === 'security') loadSecurity();
-    else if (currentView === 'incidents') loadIncidents();
-    else if (currentView === 'overview') { loadOverview(); refreshApprovalsCount(); }
-    else refreshApprovalsCount();
-  } catch(e) {
-    document.getElementById('status-pill').textContent = '● Offline';
+    const [f, p, a, sc, h] = await Promise.all([
+      api('/findings/?limit=500'), api('/events/approvals/pending?limit=500'),
+      api('/agents/'), api('/events/scan-status'), api('/health'),
+    ]);
+    S.findings = f.findings; S.stats = f.stats; S.llm = f.llm_provider;
+    S.pending = p.pending; S.agents = a; S.scan = sc; S.health = h;
+    S.online = true; S.needKey = false; S.loaded = true;
+    if (!S.version) S.version = await api('/version').catch(() => null);
+    await loadViewData();
+    if (S.view === 'findings' && S.selected) await loadDetail(S.selected);
+  } catch (e) {
+    S.online = e.status !== 0;
+    S.needKey = e.status === 401;
+    if (!S.needKey && e.status !== 0) toast('Refresh failed: ' + e.message, 'err');
+  } finally {
+    refreshing = false;
+    render();
   }
 }
-
-async function refreshApprovalsCount(){
-  try {
-    const r = await fetch('/events/approvals/pending');
-    const d = await r.json();
-    const n = (d.pending||[]).length;
-    document.getElementById('tab-approvals-cnt').textContent = n ? '('+n+')' : '';
-  } catch(e){ /* ignore */ }
+async function loadViewData() {
+  if (S.view === 'audit') S.audit = (await api('/audit/?limit=300')).entries;
+  if (S.view === 'incidents') S.incidents = (await api('/findings/incidents?limit=200')).incidents;
+  if (S.view === 'security') S.severity = (await api('/findings/severity')).by_severity;
+}
+async function loadDetail(id) {
+  try { S.detail[id] = await api('/findings/' + encodeURIComponent(id) + '/detail'); }
+  catch (e) { S.detail[id] = {error: e.status === 404 ? 'This finding no longer exists.' : e.message}; }
 }
 
-setInterval(refresh, 2000);
-refresh();
-loadOverview();
+// ── Rendering (idempotent; only touches the DOM when output changes) ──
+const lastHtml = {};
+function put(id, html) { if (lastHtml[id] !== html) { $(id).innerHTML = html; lastHtml[id] = html; } }
+
+function render() {
+  renderChrome(); renderSide();
+  if (S.view === 'overview') renderOverview();
+  if (S.view === 'findings') renderFindings();
+  if (S.view === 'approvals') renderApprovals();
+  if (S.view === 'incidents') renderIncidents();
+  if (S.view === 'security') renderSecurity();
+  if (S.view === 'audit') renderAudit();
+  if (S.view === 'settings') renderSettings();
+}
+
+function renderChrome() {
+  const focusedTab = document.activeElement && document.activeElement.classList.contains('tab')
+    ? document.activeElement.id : null;
+  put('tabs', VIEWS.map(([k, label], i) =>
+    `<button class="tab" role="tab" id="tab-${k}" aria-controls="view-${k}" type="button"
+      aria-selected="${S.view === k}" tabindex="${S.view === k ? 0 : -1}" data-view="${k}"
+      title="${esc(label)} (${i + 1})">${esc(label)}${k === 'approvals'
+        ? `<span class="badge">${S.pending.length || ''}</span>` : ''}</button>`).join(''));
+  if (focusedTab && document.activeElement !== $(focusedTab)) $(focusedTab).focus();
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + S.view));
+
+  const pill = $('api-pill');
+  const [cls, text] = S.online === null ? ['', 'Connecting…']
+    : S.needKey ? ['warn', 'API key needed'] : S.online ? ['ok', 'API online'] : ['bad', 'API offline'];
+  pill.className = 'pill ' + cls; pill.lastElementChild.textContent = text;
+  $('llm-pill').textContent = 'LLM ' + (S.llm || '—');
+  $('auth-banner').classList.toggle('show', S.needKey);
+  const down = $('down-banner');
+  down.classList.toggle('show', S.online === false);
+  down.textContent = S.online === false
+    ? 'Cannot reach the Concord API. Showing the last data received; retrying every 5s.' : '';
+
+  const btn = $('scan-btn'), sc = S.scan;
+  const scanning = sc && sc.status === 'scanning';
+  btn.disabled = !S.loaded || scanning || S.busy.has('scan') || !S.online;
+  btn.innerHTML = scanning ? '<span class="spin" aria-hidden="true"></span> Scanning…'
+    : 'Scan ' + esc((sc && sc.target) || 'repository');
+  btn.title = sc && sc.target ? 'Clone/update and scan ' + sc.target : '';
+}
+
+function agentRows(list, compact) {
+  if (!list) return '<div class="skel"></div>';
+  if (!list.length) return '<div class="muted">No agents reported.</div>';
+  return list.map(a => `<div class="agent ${a.status === 'active' ? 'active' : 'blocked'}"
+      title="${esc(a.detail)}"><span class="d" aria-hidden="true"></span><div style="min-width:0">
+      <div class="n">${esc(agentName(a.domain))} <span class="sr-only">${esc(a.status)}</span></div>
+      <div class="s">${esc(a.backing)}${a.status === 'active' ? ' · ' + Number(a.reliability).toFixed(2)
+        : ' · <span style="color:var(--crit)">blocked</span>'}</div>
+      ${!compact && a.status !== 'active' ? `<div class="s">${esc(a.detail)}</div>` : ''}
+    </div></div>`).join('');
+}
+
+function scanSummary(sc, long) {
+  if (!sc) return '—';
+  if (sc.status === 'idle') return `No scan has run since the API started.<br>Target: <b>${esc(sc.target)}</b>`;
+  if (sc.status === 'scanning') return `<b>Scanning ${esc(sc.target)}</b><br>${esc(sc.message || '')}`;
+  if (sc.status === 'error') return `<b style="color:var(--crit)">Scan failed</b><br>${esc(sc.error || '')}`;
+  const parts = Object.entries(sc.by_scanner || {}).map(([k, v]) => `${esc(k)} ${v}`).join(' · ');
+  return `<b>${sc.total ?? '—'} violation(s)</b> ${sc.severity ? sevChip(sc.severity) : ''}<br>`
+    + (parts ? `<span class="dim">${parts}</span><br>` : '')
+    + `${esc(sc.target)} @ <span class="mono">${esc((sc.commit || '').slice(0, 12))}</span><br>`
+    + (sc.unchanged ? 'Unchanged commit — existing finding kept.<br>' : '')
+    + (sc.needs_approval ? '<span style="color:var(--med)">Awaiting a human decision</span><br>' : '')
+    + `${timeEl(sc.finished)}`
+    + (long && sc.warnings && sc.warnings.length ? '<br>' + sc.warnings.map(w => '⚠ ' + esc(w)).join('<br>') : '');
+}
+
+function renderSide() {
+  put('side-agents', agentRows(S.agents && S.agents.agents, true));
+  const st = S.stats;
+  put('side-stats', st ? `<dt>Total</dt><dd>${st.total}</dd><dt>Fast path</dt><dd>${st.fast}</dd>
+    <dt>AI path</dt><dd>${st.ai}</dd><dt>Awaiting decision</dt><dd style="color:${S.pending.length
+      ? 'var(--med)' : 'inherit'}">${S.pending.length}</dd>` : lastHtml['side-stats'] || '');
+  put('side-scan', scanSummary(S.scan, false));
+}
+
+function emptyState(icon, title, text) {
+  return `<div class="empty"><div class="big" aria-hidden="true">${icon}</div><b>${esc(title)}</b><div>${text}</div></div>`;
+}
+const loadingPane = '<div class="pane"><div class="skel" style="width:40%;margin-bottom:16px"></div><div class="skel"></div></div>';
+
+function renderOverview() {
+  if (!S.loaded) return put('view-overview', loadingPane);
+  const st = S.stats, ag = S.agents;
+  const recent = S.findings.slice(0, 6);
+  put('view-overview', `<div class="pane">
+    <div class="pane-hdr"><h1>Overview</h1><span class="sub">Live from the Concord API</span></div>
+    <div class="stats">
+      <div class="stat"><div class="k">Findings</div><div class="v">${st.total}</div></div>
+      <div class="stat"><div class="k">Fast path</div><div class="v">${st.fast}</div></div>
+      <div class="stat"><div class="k">AI path</div><div class="v">${st.ai}</div></div>
+      <div class="stat ${S.pending.length ? 'attn' : ''}"><div class="k">Awaiting decision</div>
+        <div class="v">${S.pending.length}</div></div>
+      <div class="stat"><div class="k">Agents active</div><div class="v">${ag.active}<span class="muted" style="font-size:16px"> / ${ag.active + ag.blocked}</span></div></div>
+    </div>
+    <div class="grid2">
+      <div class="card"><h3>Recent findings</h3>${recent.length ? recent.map(f => `
+        <div class="row click" data-open="${esc(f.id)}" style="cursor:pointer">
+          <span style="display:flex;gap:8px;align-items:center;min-width:0">${sevChip(f.severity)}
+          <span class="mono" style="overflow:hidden;text-overflow:ellipsis">${esc(f.id)}</span></span>
+          <span class="r">${statusChip(f)}</span></div>`).join('')
+        : emptyState('◎', 'No findings yet', 'Run a scan from the header, or <span class="mono">concord invoke</span>.')}</div>
+      <div class="card"><h3>Agents</h3>${agentRows(ag.agents, false)}</div>
+      <div class="card"><h3>Last scan</h3><div class="scanbox">${scanSummary(S.scan, true)}</div></div>
+      <div class="card"><h3>System</h3>
+        <div class="row"><span>API</span><span class="r">${esc(S.health.status)} · v${esc(S.health.version)}</span></div>
+        <div class="row"><span>Authentication</span><span class="r">${S.health.auth_enforced ? 'API key enforced' : '<span style="color:var(--med)">open dev mode</span>'}</span></div>
+        <div class="row"><span>LLM provider</span><span class="r">${esc(S.llm)}</span></div>
+        <div class="row"><span>Tiebreaks recorded</span><span class="r">${st.tiebreaks}</span></div>
+      </div>
+    </div></div>`);
+}
+
+function filteredFindings() {
+  const q = ($('f-filter').value || '').toLowerCase().trim();
+  const want = $('f-status').value;
+  return S.findings.filter(f => {
+    const k = status(f).k;
+    if (want === 'pending' && k !== 'pending') return false;
+    if (want === 'resolved' && !['approved', 'rejected', 'expired', 'auto'].includes(k)) return false;
+    if (want === 'fast' && k !== 'fast') return false;
+    if (!q) return true;
+    return [f.id, f.repo, f.artifact, f.source, f.severity, f.agent].some(v => String(v || '').toLowerCase().includes(q));
+  });
+}
+
+function renderFindings() {
+  if (!S.loaded) { put('f-items', '<div style="padding:12px"><div class="skel"></div></div>'); return; }
+  const list = filteredFindings();
+  put('f-items', list.length ? list.map(f => `
+    <button class="item" role="option" type="button" data-id="${esc(f.id)}" aria-selected="${f.id === S.selected}">
+      <div class="t1">${sevChip(f.severity)}<span class="id">${esc(f.id)}</span><span class="when">${timeEl(f.timestamp)}</span></div>
+      <div class="t2">${statusChip(f)}<span class="art" title="${esc(f.artifact)}">${esc(f.repo || lastPart(f.artifact))}</span></div>
+    </button>`).join('')
+    : S.findings.length ? emptyState('⌕', 'No matches', 'No finding matches the current filter.')
+    : emptyState('◎', 'No findings yet', 'Click <b>Scan</b> in the header to scan the repository, or run <span class="mono">concord invoke</span>.'));
+  renderDetail();
+}
+
+function renderDetail() {
+  const id = S.selected;
+  if (!id) return put('f-detail', emptyState('◎', 'Select a finding', 'Pick one from the list (or use <kbd>j</kbd>/<kbd>k</kbd>).'));
+  const d = S.detail[id];
+  if (!d) return put('f-detail', loadingPane.replace('pane', 'pane" style="padding:0'));
+  if (d.error) return put('f-detail', emptyState('!', 'Cannot show this finding', esc(d.error)));
+  const f = d.finding, r = f.result || {}, st = status(f);
+  const analyses = r.analyses || {};
+  const cands = Object.entries(r.agents || {}).sort((a, b) => b[1] - a[1]);
+  const scan = r.scan;
+  const busy = S.busy.has('decide:' + id);
+
+  let decision = '';
+  if (st.k === 'pending') {
+    decision = `<div class="decision"><h3>Human decision required</h3>
+      <p>The top candidates are closer than the arbitration gap threshold, so Concord will not
+      pick one on its own. Choose the agent whose analysis should stand, or reject the finding.</p>
+      <div class="acts">${cands.map(([a, s]) =>
+        `<button class="btn sm primary" type="button" data-approve="${esc(a)}" ${busy ? 'disabled' : ''}>
+          Approve ${esc(agentName(a))} · ${Number(s).toFixed(4)}</button>`).join('')}
+        <button class="btn sm danger" type="button" data-reject ${busy ? 'disabled' : ''}>Reject</button></div></div>`;
+  } else if (st.k === 'approved') {
+    decision = `<div class="resolved">Approved <b>${esc(r.approved_by)}</b> ${timeEl(r.approved_at)}
+      ${r.github_url ? ` · <a href="${esc(r.github_url)}" target="_blank" rel="noopener noreferrer">GitHub issue</a>` : ''}</div>`;
+  } else if (st.k === 'rejected') {
+    decision = `<div class="resolved rej">Rejected ${timeEl(r.rejected_at)} — ${esc(r.reject_reason || '')}</div>`;
+  } else if (st.k === 'expired') {
+    decision = `<div class="resolved rej">Approval expired ${timeEl(r.expired_at)} without a decision.</div>`;
+  }
+
+  const agentCards = Object.entries(analyses).sort((a, b) => b[1].score - a[1].score).map(([a, x]) => `
+    <div class="acard ${a === r.agent ? 'win' : ''}">
+      <div class="h"><b>${esc(agentName(a))}</b>${a === r.agent ? '<span class="chip ai">top</span>' : ''}
+        <span class="score">${Number(x.score).toFixed(4)}</span></div>
+      <div class="muted" style="font-size:12px">${esc(x.backend || x.scanner || '')}
+        ${x.violations != null ? ' · ' + x.violations + ' violation(s)' : ''}</div>
+      <pre>${esc(x.root_cause)}</pre>
+      <div><div class="muted" style="font-size:12px">Suggested fix</div><pre>${esc(x.suggested_fix)}</pre></div>
+    </div>`).join('');
+
+  const skips = Object.entries(r.skipped_agents || {});
+  put('f-detail', `
+    <div class="pane-hdr"><h1 class="mono" style="font-size:15px">${esc(f.id)}</h1>${sevChip(f.severity)}${statusChip(f)}</div>
+    ${decision}
+    <dl class="dl">
+      <dt>Repository</dt><dd>${esc(f.repo || '—')}</dd>
+      <dt>Artifact</dt><dd class="mono">${esc(f.artifact || '—')}</dd>
+      <dt>Source</dt><dd>${esc(f.source || '—')}</dd>
+      <dt>Recorded</dt><dd>${esc(fullTime(f.timestamp))} (${esc(ago(f.timestamp))})</dd>
+      <dt>Path</dt><dd>${f.path === 'ai_path' ? '<span class="chip ai">AI path</span>' : '<span class="chip">fast path</span>'}
+        ${r.reason ? ' <span class="dim">' + esc(r.reason) + '</span>' : ''}</dd>
+      ${scan ? `<dt>Scan</dt><dd>${scan.total} violation(s) · ${Object.entries(scan.by_scanner || {}).map(([k, v]) => esc(k) + ' ' + v).join(' · ')}
+        · commit <span class="mono">${esc((scan.commit || '').slice(0, 12))}</span></dd>` : ''}
+      ${cands.length > 1 ? `<dt>Confidence gap</dt><dd class="mono">${Number(cands[0][1] - cands[1][1]).toFixed(4)}</dd>` : ''}
+    </dl>
+    ${agentCards ? `<h2 class="sh">Agent analyses</h2><div class="agents-grid">${agentCards}</div>` : ''}
+    ${skips.length ? `<h2 class="sh">Agents that did not run</h2><ul class="skips">${skips.map(([a, w]) =>
+      `<li><b>${esc(agentName(a))}</b> — ${esc(w)}</li>`).join('')}</ul>` : ''}
+    ${r.pr_comment ? `<h2 class="sh">PR comment</h2><div class="comment">${esc(r.pr_comment)}</div>` : ''}
+    <h2 class="sh">Audit timeline</h2>
+    ${d.timeline.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>When</th><th>Path</th><th>Reason</th><th>Agent</th><th>Correlation</th></tr></thead>
+      <tbody>${d.timeline.map(e => `<tr><td>${timeEl(e.timestamp)}</td><td><span class="chip ${e.path === 'ai_path' ? 'ai' : ''}">${esc(e.path)}</span></td>
+      <td>${esc(e.reason)}</td><td>${esc(e.agent || '—')}</td><td class="mono">${esc(e.correlation_id)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<p class="muted">No audit entries.</p>'}`);
+}
+
+function renderApprovals() {
+  if (!S.loaded) return put('view-approvals', loadingPane);
+  const rows = S.pending;
+  put('view-approvals', `<div class="pane">
+    <div class="pane-hdr"><h1>Approvals</h1><span class="sub">AI-path findings whose top agents are too close to call</span></div>
+    ${rows.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Finding</th><th>Severity</th><th>Repository</th><th>Candidates</th><th>Raised</th><th>Decide</th></tr></thead><tbody>
+    ${rows.map(f => {
+      const c = Object.entries((f.result || {}).agents || {}).sort((a, b) => b[1] - a[1]);
+      const busy = S.busy.has('decide:' + f.id);
+      return `<tr><td class="mono"><a href="#" data-open="${esc(f.id)}" style="color:inherit">${esc(f.id)}</a></td>
+        <td>${sevChip(f.severity)}</td><td>${esc(f.repo || lastPart(f.artifact))}</td>
+        <td>${c.map(([a, s]) => `${esc(agentName(a))} <span class="muted mono">${Number(s).toFixed(2)}</span>`).join('<br>') || '—'}</td>
+        <td>${timeEl(f.timestamp)}</td>
+        <td><div class="acts">${c.map(([a]) => `<button class="btn sm primary" type="button" data-fid="${esc(f.id)}" data-approve="${esc(a)}" ${busy ? 'disabled' : ''}>${esc(agentName(a))}</button>`).join('')}
+        <button class="btn sm danger" type="button" data-fid="${esc(f.id)}" data-reject ${busy ? 'disabled' : ''}>Reject</button></div></td></tr>`;
+    }).join('')}</tbody></table></div>`
+    : emptyState('✓', 'Nothing awaiting a decision', 'Tiebreaks appear here when two agents land within the confidence gap.')}
+  </div>`);
+}
+
+function renderIncidents() {
+  const inc = S.incidents;
+  put('view-incidents', `<div class="pane">
+    <div class="pane-hdr"><h1>Incidents</h1><span class="sub">Findings grouped by affected artifact</span></div>
+    ${inc == null ? '<div class="skel"></div>' : inc.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+      <th>Artifact</th><th>Highest severity</th><th class="num">Findings</th><th>Open</th><th>Last seen</th></tr></thead><tbody>
+      ${inc.map(i => `<tr><td class="mono" title="${esc(i.artifact)}">${esc(i.artifact)}</td><td>${sevChip(i.max_severity)}</td>
+      <td class="num">${i.count}</td><td>${i.unresolved ? `<span class="st st-pending">${i.unresolved} awaiting decision</span>` : '<span class="st st-approved">none open</span>'}</td>
+      <td>${timeEl(i.last_seen)}</td></tr>`).join('')}</tbody></table></div>`
+      : emptyState('◎', 'No incidents', 'Incidents group findings that touch the same artifact.')}
+  </div>`);
+}
+
+function renderSecurity() {
+  const bd = S.severity;
+  let body;
+  if (bd == null) body = '<div class="skel"></div>';
+  else {
+    const total = Object.values(bd).reduce((a, b) => a + b, 0);
+    body = !total ? emptyState('◎', 'No findings yet', 'Severity distribution appears after the first finding.')
+      : `<div class="card" style="max-width:720px">${SEV_ORDER.filter(s => s !== 'INFORMATIONAL' || bd[s]).map(s => {
+        const n = bd[s] || 0, pct = total ? n / total * 100 : 0;
+        return `<div class="bar-row"><span>${sevChip(s)}</span>
+          <div class="bar" role="img" aria-label="${esc(s)}: ${n} of ${total}"><i style="width:${pct.toFixed(1)}%;background:var(${SEV_VAR[s]})"></i></div>
+          <span class="mono" style="text-align:right">${n}</span></div>`;
+      }).join('')}<p class="muted" style="margin-top:12px">${total} finding(s); each counted once at its latest decision.</p></div>`;
+  }
+  put('view-security', `<div class="pane"><div class="pane-hdr"><h1>Security</h1><span class="sub">Severity distribution</span></div>${body}</div>`);
+}
+
+function renderAudit() {
+  const e = S.audit;
+  put('view-audit', `<div class="pane">
+    <div class="pane-hdr"><h1>Audit trail</h1><span class="sub">Every decision, including fast-path, newest first</span></div>
+    ${e == null ? '<div class="skel"></div>' : e.length ? `<div class="tbl-wrap"><table class="tbl"><thead><tr>
+      <th>When</th><th>Finding</th><th>Path</th><th>Reason</th><th>Agent</th><th>Correlation id</th></tr></thead><tbody>
+      ${e.map(x => `<tr><td>${timeEl(x.timestamp)}</td><td class="mono"><a href="#" data-open="${esc(x.finding_id)}" style="color:inherit">${esc(x.finding_id)}</a></td>
+      <td><span class="chip ${x.path === 'ai_path' ? 'ai' : ''}">${esc(x.path)}</span></td><td>${esc(x.reason)}</td>
+      <td>${esc(x.agent || '—')}</td><td class="mono">${esc(x.correlation_id)}</td></tr>`).join('')}</tbody></table></div>`
+      : emptyState('◎', 'No audit entries yet', 'Entries are written for every finding decision.')}
+  </div>`);
+}
+
+function renderSettings() {
+  if (!S.loaded) return put('view-settings', loadingPane);
+  const h = S.health, v = S.version || {}, sc = S.scan || {};
+  const rows = [
+    ['Service', v.service || 'concord'], ['Version', h.version],
+    ['API status', h.status],
+    ['Authentication', h.auth_enforced ? 'API key enforced' : 'open dev mode (set CONCORD_API_KEY)'],
+    ['LLM provider', S.llm], ['Scan target', sc.target || '—'],
+    ['API key in this tab', apiKey() ? 'set (sessionStorage)' : 'none'],
+  ];
+  put('view-settings', `<div class="pane">
+    <div class="pane-hdr"><h1>Settings</h1><span class="sub">Read-only; configured through environment variables</span></div>
+    <div class="grid2">
+      <div class="card"><h3>System</h3>${rows.map(([k, val]) => `<div class="row"><span>${esc(k)}</span><span class="r mono">${esc(val)}</span></div>`).join('')}
+        ${apiKey() ? '<div style="margin-top:12px"><button class="btn sm" type="button" id="forget-key">Forget API key</button></div>' : ''}</div>
+      <div class="card"><h3>Agent backends</h3>${(S.agents.agents || []).map(a => `<div class="row"><span>${esc(agentName(a.domain))}</span>
+        <span class="r"><span class="st ${a.status === 'active' ? 'st-approved' : 'st-rejected'}">${esc(a.status)}</span><br>
+        <span class="muted" style="font-size:12px">${esc(a.detail)}${a.endpoint ? ' · ' + esc(a.endpoint) : ''}</span></span></div>`).join('')}</div>
+    </div>
+    <p class="muted" style="margin-top:16px;font-size:12px">Secrets are never shown. See <span class="mono">.env.example</span>,
+      <span class="mono">connectors/tools.yaml</span> and <span class="mono">docs/AGENTS_SETUP.md</span>.</p>
+  </div>`);
+}
+
+// ── Actions ────────────────────────────────────────────────────────────
+async function switchView(v, focusTab) {
+  if (!VIEWS.some(([k]) => k === v)) return;
+  S.view = v;
+  try { history.replaceState(null, '', '#' + v + (v === 'findings' && S.selected ? '/' + encodeURIComponent(S.selected) : '')); } catch {}
+  render();
+  if (focusTab) $('tab-' + v).focus();
+  if (S.loaded) { try { await loadViewData(); } catch (e) { toast(e.message, 'err'); } render(); }
+}
+async function openFinding(id) {
+  S.selected = id;
+  await switchView('findings');
+  await loadDetail(id); render();
+  const el = document.querySelector(`.item[data-id="${CSS.escape(id)}"]`);
+  if (el) el.scrollIntoView({block: 'nearest'});
+}
+async function decide(fid, agent) {
+  const key = 'decide:' + fid;
+  if (S.busy.has(key)) return;
+  S.busy.add(key); render();
+  try {
+    if (agent) {
+      const r = await api(`/events/findings/${encodeURIComponent(fid)}/approve/${encodeURIComponent(agent)}`, {method: 'POST'});
+      toast(r.message || 'Approved', r.github_error ? 'err' : 'ok', 5000);
+    } else {
+      await api(`/events/findings/${encodeURIComponent(fid)}/reject`, {method: 'POST'});
+      toast('Finding rejected');
+    }
+  } catch (e) {
+    toast((agent ? 'Approval' : 'Rejection') + ' failed: ' + e.message, 'err', 6000);
+  } finally {
+    S.busy.delete(key);
+    await refresh();
+    if (S.selected === fid) { await loadDetail(fid); render(); }
+  }
+}
+async function startScan() {
+  S.busy.add('scan'); render();
+  try {
+    S.scan = await api('/events/scan-crms', {method: 'POST'});
+    toast('Scan started: ' + S.scan.target);
+    pollScan();
+  } catch (e) { toast('Could not start scan: ' + e.message, 'err', 6000); }
+  finally { S.busy.delete('scan'); render(); }
+}
+let scanTimer;
+function pollScan() {
+  clearTimeout(scanTimer);
+  scanTimer = setTimeout(async () => {
+    try { S.scan = await api('/events/scan-status'); } catch { /* shown by refresh */ }
+    render();
+    if (S.scan && S.scan.status === 'scanning') return pollScan();
+    if (S.scan && S.scan.status === 'done') {
+      toast(S.scan.unchanged ? 'No new commit — existing finding kept' : `Scan complete: ${S.scan.total} violation(s)`);
+      await refresh();
+      if (S.scan.finding_id) openFinding(S.scan.finding_id);
+    } else if (S.scan && S.scan.status === 'error') {
+      toast('Scan failed: ' + S.scan.error, 'err', 8000); refresh();
+    }
+  }, 1500);
+}
+
+// ── Events ─────────────────────────────────────────────────────────────
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-view],[data-id],[data-open],[data-approve],[data-reject],#scan-btn,#forget-key');
+  if (!t) return;
+  if (t.id === 'scan-btn') return startScan();
+  if (t.id === 'forget-key') { try { sessionStorage.removeItem('concord.key'); } catch {} toast('API key forgotten'); return refresh(); }
+  if (t.dataset.view) return switchView(t.dataset.view);
+  if (t.dataset.open) { e.preventDefault(); return openFinding(t.dataset.open); }
+  if (t.dataset.id) return openFinding(t.dataset.id);
+  const fid = t.dataset.fid || S.selected;
+  if (t.dataset.approve !== undefined) return decide(fid, t.dataset.approve);
+  if (t.dataset.reject !== undefined) {
+    if (confirm(`Reject ${fid}? This is recorded in the audit log.`)) decide(fid, null);
+  }
+});
+$('f-filter').addEventListener('input', () => renderFindings());
+$('f-status').addEventListener('change', () => renderFindings());
+$('key-form').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('key-input').value.trim();
+  if (!v) return;
+  try { sessionStorage.setItem('concord.key', v); } catch {}
+  $('key-input').value = '';
+  refresh();
+});
+document.addEventListener('keydown', e => {
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (e.key === 'Escape' && typing) { document.activeElement.blur(); return; }
+  if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+  const n = parseInt(e.key, 10);
+  if (n >= 1 && n <= VIEWS.length) { e.preventDefault(); return switchView(VIEWS[n - 1][0], true); }
+  if (e.key === 'r') { e.preventDefault(); return refresh(); }
+  if (e.key === '/') { e.preventDefault(); if (S.view !== 'findings') switchView('findings'); return $('f-filter').focus(); }
+  if ((e.key === 'j' || e.key === 'k') && S.view === 'findings') {
+    const list = filteredFindings(); if (!list.length) return;
+    let i = list.findIndex(f => f.id === S.selected);
+    i = e.key === 'j' ? Math.min(list.length - 1, i + 1) : Math.max(0, i - 1);
+    e.preventDefault(); return openFinding(list[i].id);
+  }
+  if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && document.activeElement.classList.contains('tab')) {
+    const i = VIEWS.findIndex(([k]) => k === S.view);
+    const j = (i + (e.key === 'ArrowRight' ? 1 : VIEWS.length - 1)) % VIEWS.length;
+    e.preventDefault(); return switchView(VIEWS[j][0], true);
+  }
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+
+// ── Boot ───────────────────────────────────────────────────────────────
+(function boot() {
+  const [v, id] = (location.hash.slice(1) || '').split('/');
+  if (VIEWS.some(([k]) => k === v)) S.view = v;
+  if (id) S.selected = decodeURIComponent(id);
+  render();
+  refresh().then(() => {
+    if (S.scan && S.scan.status === 'scanning') pollScan();
+  });
+  setInterval(() => { if (!document.hidden) refresh(); }, POLL_MS);
+  setInterval(() => document.querySelectorAll('time[datetime]').forEach(t => {
+    t.textContent = ago(t.getAttribute('datetime'));
+  }), 30000);
+})();
 </script>
 </body>
 </html>
