@@ -149,9 +149,11 @@ def _restore():
 
 def test_severity_endpoint(client):
     from core.persistence import FindingRecord
-    for sev in ["CRITICAL", "HIGH", "HIGH"]:
+    # Distinct ids: id(object()) is reused for short-lived objects, which made
+    # the two HIGH rows the same finding.
+    for n, sev in enumerate(["CRITICAL", "HIGH", "HIGH"]):
         store_mod.get_store().add_finding(FindingRecord(
-            id=f"SEV-{sev}-{id(object())}", severity=sev, artifact="x",
+            id=f"SEV-{sev}-{n}", severity=sev, artifact="x",
             repo="", source="", path="fast_path", agent=None, result={}))
     r = client.get("/findings/severity")
     assert r.status_code == 200
@@ -178,18 +180,23 @@ def test_agents_endpoint(client):
     assert r.status_code == 200
     d = r.json()
     domains = {a["domain"]: a for a in d["agents"]}
-    # Security must be active (it's a real agent), kubernetes planned.
+    # Built-in agents are active; kagent/HolmesGPT agents are blocked with a
+    # concrete reason (the test manifest declares no connector for them).
     assert domains["security"]["status"] == "active"
-    assert domains["kubernetes"]["status"] == "planned"
+    assert domains["kubernetes"]["status"] == "blocked"
+    assert "no 'kubernetes' connector" in domains["kubernetes"]["detail"]
+    assert domains["observability"]["status"] == "blocked"
     assert d["active"] == 3
-    assert d["planned"] == 2
+    assert d["blocked"] == 2
 
 
 def test_findings_severity_filter(client):
     from core.persistence import FindingRecord
-    for sev in ["CRITICAL", "HIGH", "HIGH"]:
+    # Distinct ids: id(object()) is reused for short-lived objects, which made
+    # the two HIGH rows the same finding.
+    for n, sev in enumerate(["CRITICAL", "HIGH", "HIGH"]):
         store_mod.get_store().add_finding(FindingRecord(
-            id=f"FL-{sev}-{id(object())}", severity=sev, artifact="x",
+            id=f"FL-{sev}-{n}", severity=sev, artifact="x",
             repo="", source="", path="fast_path", agent=None, result={}))
     r = client.get("/findings/", params={"severity": "high"})
     assert r.status_code == 200

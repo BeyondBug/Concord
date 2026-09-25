@@ -104,14 +104,30 @@ class SecureTransport:
         """Return an authenticated, TLS-verified client for one connector."""
         self._guard_scheme(connector_name, base_url, tls)
         token = self.broker.get_token(connector_name)
+        return self._build(base_url, {"Authorization": f"Bearer {token}"}, tls, 30.0)
+
+    def get_client_for(self, connector: ConnectorConfig) -> httpx.AsyncClient:
+        """Build a client straight from a manifest connector.
+
+        Honors the connector's ``token_env``, ``auth`` mode and timeout. With
+        ``auth: none`` no credential is read or sent; the scheme guard and TLS
+        policy still apply.
+        """
+        self._guard_scheme(connector.name, connector.url, connector.tls)
+        headers = {}
+        if connector.auth == "bearer":
+            token = self.broker.get_token(connector.name, env_key=connector.token_env)
+            headers["Authorization"] = f"Bearer {token}"
+        return self._build(connector.url, headers, connector.tls,
+                           connector.timeout_seconds)
+
+    @staticmethod
+    def _build(base_url: str, headers: dict, tls: ConnectorTLS | None,
+               timeout: float) -> httpx.AsyncClient:
         return httpx.AsyncClient(
             base_url=base_url,
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=30.0,
+            headers=headers,
+            timeout=httpx.Timeout(timeout, connect=5.0),
             verify=_build_verify(tls),
             cert=_build_cert(tls),
         )
-
-    def get_client_for(self, connector: ConnectorConfig) -> httpx.AsyncClient:
-        """Convenience: build a client straight from a manifest connector."""
-        return self.get_client(connector.name, connector.url, connector.tls)

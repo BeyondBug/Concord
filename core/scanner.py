@@ -12,6 +12,9 @@ from typing import ClassVar
 
 logger = logging.getLogger("concord.scanner")
 
+# Violations kept per scan result (the full count is always in "total").
+MAX_CHECKS = 50
+
 
 @dataclass
 class Finding:
@@ -155,8 +158,11 @@ class KubernetesScanner:
              pattern=r'runAsUser:\s*0\b|runAsNonRoot:\s*false',
              title="Container may run as root user",
              fix='Set runAsNonRoot: true and runAsUser to non-zero value'),
+        # Matched by _added_capability_line(): only capabilities listed under
+        # `add:` count. (The old bare NET_ADMIN|SYS_ADMIN|ALL regex ran with
+        # IGNORECASE and so flagged any line containing "all".)
         dict(id="CKV_K8S_28",  sev="MEDIUM",
-             pattern=r'NET_ADMIN|SYS_ADMIN|ALL',
+             pattern=None, matcher="added_capability",
              title="Dangerous Linux capability added to container",
              fix='Remove dangerous capabilities; use drop: [ALL] instead'),
         dict(id="CKV_K8S_35",  sev="HIGH",
@@ -166,10 +172,12 @@ class KubernetesScanner:
         dict(id="CKV_K8S_8",   sev="MEDIUM",
              pattern=r'livenessProbe:',
              invert=True,  # flag when NOT present
+             workload_only=True,
              title="Container missing liveness probe",
              fix='Add livenessProbe to detect and restart unhealthy containers'),
         dict(id="CKV_K8S_11",  sev="MEDIUM",
              pattern=r'resources:\s*\{\}|resources:$',
+             workload_only=True,
              title="Container has no resource limits defined",
              fix='Set resources.limits.cpu and resources.limits.memory'),
         dict(id="CKV_K8S_43",  sev="HIGH",
@@ -207,21 +215,16 @@ class KubernetesScanner:
                 logger.warning("Cannot read %s: %s", yf, exc)
                 continue
 
+            is_workload = bool(_WORKLOAD_KIND.search(text))
             for check in self.CHECKS:
+                if check.get("workload_only") and not is_workload:
+                    continue
                 invert = check.get("invert", False)
-                matched = any(re.search(check["pattern"], ln, re.IGNORECASE)
-                              for ln in lines)
-                if invert:
-                    matched = not matched
+                hit = self._first_match(check, lines)
+                matched = (hit is None) if invert else (hit is not None)
 
                 if matched:
-                    # Find line number
-                    line_no = 1
-                    if not invert:
-                        for i, ln in enumerate(lines, 1):
-                            if re.search(check["pattern"], ln, re.IGNORECASE):
-                                line_no = i
-                                break
+                    line_no = 1 if invert else hit
                     results.append(Finding(
                         check_id=check["id"],
                         severity=check["sev"],
@@ -235,6 +238,62 @@ class KubernetesScanner:
         logger.info("Kubernetes scan: %d violations in %d files",
                     len(results), len(yaml_files))
         return results
+
+    @staticmethod
+    def _first_match(check: dict, lines: list[str]) -> int | None:
+        """1-based line of the first match, or None."""
+        if check.get("matcher") == "added_capability":
+            return _added_capability_line(lines)
+        for i, ln in enumerate(lines, 1):
+            if re.search(check["pattern"], ln, re.IGNORECASE):
+                return i
+        return None
+
+
+# Pod-spec-bearing kinds: only these have containers that need probes/limits.
+_WORKLOAD_KIND = re.compile(
+    r"^kind:\s*(Pod|Deployment|StatefulSet|DaemonSet|ReplicaSet|Job|CronJob"
+    r"|ReplicationController)\s*$", re.MULTILINE)
+
+_DANGEROUS_CAPS = {"NET_ADMIN", "SYS_ADMIN", "ALL"}
+
+
+def _added_capability_line(lines: list[str]) -> int | None:
+    """Line of a dangerous capability listed under ``capabilities.add``.
+
+    Handles both ``add: ["NET_ADMIN"]`` and the block form::
+
+        add:
+          - SYS_ADMIN
+
+    Capability names are case-sensitive in Kubernetes, and ``drop: [ALL]``
+    (the recommended hardening) is never flagged.
+    """
+    in_add, add_indent = False, -1
+    for i, raw in enumerate(lines, 1):
+        line = raw.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        indent = len(line) - len(line.lstrip())
+        stripped = line.strip()
+        m = re.match(r"add:\s*(.*)$", stripped)
+        if m:
+            inline = m.group(1)
+            if inline.startswith("["):
+                caps = {c.strip(" '\"") for c in inline.strip("[]").split(",")}
+                if caps & _DANGEROUS_CAPS:
+                    return i
+                in_add = False
+            else:
+                in_add, add_indent = True, indent
+            continue
+        if in_add:
+            if stripped.startswith("-") and indent >= add_indent:
+                if stripped.lstrip("- ").strip(" '\"") in _DANGEROUS_CAPS:
+                    return i
+                continue
+            in_add = False
+    return None
 
 
 class SourceCodeScanner:
@@ -396,7 +455,7 @@ def scan_to_dict(findings: list[Finding], target: str) -> dict:
     return {
         "total":      len(findings),
         "passed":     0,   # custom scanner doesn't count passed checks
-        "checks":     [vars(f) for f in findings[:5]],
+        "checks":     [vars(f) for f in findings[:MAX_CHECKS]],
         "root_cause": root_cause,
         "fix":        fix,
         "by_severity": {k: len(v) for k, v in by_sev.items()},

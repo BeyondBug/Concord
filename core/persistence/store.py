@@ -55,6 +55,14 @@ class AuditRecord:
     timestamp: str = field(default_factory=_utcnow)
 
 
+def _is_pending(result: dict[str, Any]) -> bool:
+    """True when an AI-path result still waits on a human decision."""
+    return (result.get("auto_resolved") is False
+            and not result.get("approved_by")
+            and not result.get("rejected")
+            and not result.get("expired"))
+
+
 def _current_correlation_id() -> str:
     # Imported lazily to avoid a hard import cycle at module load.
     from core.observability import get_correlation_id
@@ -88,6 +96,11 @@ CREATE TABLE IF NOT EXISTS audit (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_finding ON audit(finding_id);
 """
+
+# A finding id can be observed more than once (a re-scan, a re-sent webhook).
+# Every observation row is kept for history, but list/stat views show one row
+# per finding: its latest decision. Shared with the PostgreSQL backend.
+LATEST_ROWS = "row_id IN (SELECT MAX(row_id) FROM findings GROUP BY id)"
 
 
 class SQLiteStore:
@@ -139,14 +152,14 @@ class SQLiteStore:
     def list_findings(self, limit: int = 50, severity: str | None = None,
                       path: str | None = None) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
-        clauses, params = [], []
+        clauses, params = [LATEST_ROWS], []
         if severity:
             clauses.append("severity = ?")
             params.append(severity.upper())
         if path:
             clauses.append("path = ?")
             params.append(path)
-        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = " WHERE " + " AND ".join(clauses)
         params.append(limit)
         with self._lock:
             rows = self._conn.execute(
@@ -193,32 +206,28 @@ class SQLiteStore:
         limit = max(1, min(limit, 500))
         with self._lock:
             rows = self._conn.execute(
-                "SELECT * FROM findings WHERE path = 'ai_path' "
+                f"SELECT * FROM findings WHERE path = 'ai_path' AND {LATEST_ROWS} "
                 "ORDER BY row_id DESC LIMIT ?", (limit,),
             ).fetchall()
         pending = []
         for r in rows:
             d = self._finding_row_to_dict(r)
-            res = d.get("result", {})
-            if res.get("auto_resolved") is False and not res.get("approved_by"):
+            if _is_pending(d.get("result", {})):
                 pending.append(d)
         return pending
 
     def finding_stats(self) -> dict[str, int]:
         with self._lock:
             total = self._conn.execute(
-                "SELECT COUNT(*) FROM findings"
+                f"SELECT COUNT(*) FROM findings WHERE {LATEST_ROWS}"
             ).fetchone()[0]
             fast = self._conn.execute(
-                "SELECT COUNT(*) FROM findings WHERE path = 'fast_path'"
+                f"SELECT COUNT(*) FROM findings WHERE path = 'fast_path' AND {LATEST_ROWS}"
             ).fetchone()[0]
             rows = self._conn.execute(
-                "SELECT result FROM findings WHERE path = 'ai_path'"
+                f"SELECT result FROM findings WHERE path = 'ai_path' AND {LATEST_ROWS}"
             ).fetchall()
-        tiebreaks = sum(
-            1 for r in rows
-            if json.loads(r["result"]).get("auto_resolved") is False
-        )
+        tiebreaks = sum(1 for r in rows if _is_pending(json.loads(r["result"])))
         return {"total": total, "fast": fast, "ai": total - fast,
                 "tiebreaks": tiebreaks}
 
@@ -226,7 +235,8 @@ class SQLiteStore:
         """Count findings grouped by severity (for the Security view)."""
         with self._lock:
             rows = self._conn.execute(
-                "SELECT severity, COUNT(*) AS n FROM findings GROUP BY severity"
+                f"SELECT severity, COUNT(*) AS n FROM findings WHERE {LATEST_ROWS} "
+                "GROUP BY severity"
             ).fetchall()
         return {r["severity"]: r["n"] for r in rows}
 
@@ -243,7 +253,7 @@ class SQLiteStore:
         with self._lock:
             rows = self._conn.execute(
                 "SELECT artifact, severity, path, result, timestamp "
-                "FROM findings ORDER BY row_id DESC"
+                f"FROM findings WHERE {LATEST_ROWS} ORDER BY row_id DESC"
             ).fetchall()
         groups: dict[str, dict[str, Any]] = {}
         for r in rows:
@@ -256,7 +266,7 @@ class SQLiteStore:
             if _rank.get(r["severity"], 0) > _rank.get(g["max_severity"], 0):
                 g["max_severity"] = r["severity"]
             res = json.loads(r["result"]) if r["result"] else {}
-            if res.get("auto_resolved") is False and not res.get("approved_by"):
+            if _is_pending(res):
                 g["unresolved"] += 1
         out = sorted(groups.values(),
                      key=lambda g: (-_rank.get(g["max_severity"], 0), -g["count"]))

@@ -1,5 +1,7 @@
 """Pydantic schema for the connector manifest (tools.yaml)."""
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class ConnectorTLS(BaseModel):
@@ -20,12 +22,23 @@ class ConnectorTLS(BaseModel):
 
 class ConnectorConfig(BaseModel):
     name: str
-    type: str = "mcp"
+    type: Literal["mcp", "http"] = "mcp"   # mcp = Streamable HTTP MCP; http = REST
     url: str
-    token_env: str
+    # bearer: send the scoped token from ``token_env``. none: the endpoint has
+    # no auth of its own (e.g. a port-forwarded in-cluster service); no token
+    # is read or sent.
+    auth: Literal["bearer", "none"] = "bearer"
+    token_env: str | None = None
     agent: str
     capabilities: list[str]
+    timeout_seconds: float = Field(default=30.0, gt=0, le=900)
     tls: ConnectorTLS | None = None
+
+    @model_validator(mode="after")
+    def _bearer_needs_token_env(self):
+        if self.auth == "bearer" and not self.token_env:
+            raise ValueError(f"connector '{self.name}': auth=bearer requires token_env")
+        return self
 
 
 class ManifestConfig(BaseModel):

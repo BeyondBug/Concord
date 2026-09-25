@@ -20,6 +20,8 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from core.persistence.store import LATEST_ROWS, _is_pending
+
 logger = logging.getLogger("concord.persistence.postgres")
 
 
@@ -100,14 +102,14 @@ class PostgresStore:
     def list_findings(self, limit: int = 50, severity: str | None = None,
                       path: str | None = None) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 500))
-        clauses, params = [], []
+        clauses, params = [LATEST_ROWS], []
         if severity:
             clauses.append("severity = %s")
             params.append(severity.upper())
         if path:
             clauses.append("path = %s")
             params.append(path)
-        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+        where = " WHERE " + " AND ".join(clauses)
         params.append(limit)
         with self._pool.connection() as conn:
             rows = conn.execute(
@@ -147,21 +149,21 @@ class PostgresStore:
         with self._pool.connection() as conn:
             rows = conn.execute(
                 "SELECT id, severity, artifact, repo, source, path, agent, "
-                "result, timestamp FROM findings WHERE path = 'ai_path' "
+                f"result, timestamp FROM findings WHERE path = 'ai_path' AND {LATEST_ROWS} "
                 "ORDER BY row_id DESC LIMIT %s", (limit,),
             ).fetchall()
         pending = []
         for r in rows:
             d = self._finding_row(r)
-            res = d.get("result", {})
-            if res.get("auto_resolved") is False and not res.get("approved_by"):
+            if _is_pending(d.get("result", {})):
                 pending.append(d)
         return pending
 
     def severity_breakdown(self) -> dict[str, int]:
         with self._pool.connection() as conn:
             rows = conn.execute(
-                "SELECT severity, COUNT(*) FROM findings GROUP BY severity"
+                f"SELECT severity, COUNT(*) FROM findings WHERE {LATEST_ROWS} "
+                "GROUP BY severity"
             ).fetchall()
         return {r[0]: r[1] for r in rows}
 
@@ -172,7 +174,7 @@ class PostgresStore:
         with self._pool.connection() as conn:
             rows = conn.execute(
                 "SELECT artifact, severity, path, result, timestamp "
-                "FROM findings ORDER BY row_id DESC"
+                f"FROM findings WHERE {LATEST_ROWS} ORDER BY row_id DESC"
             ).fetchall()
         groups: dict[str, dict[str, Any]] = {}
         for r in rows:
@@ -184,8 +186,7 @@ class PostgresStore:
             g["count"] += 1
             if _rank.get(r[1], 0) > _rank.get(g["max_severity"], 0):
                 g["max_severity"] = r[1]
-            res = _as_dict(r[3])
-            if res.get("auto_resolved") is False and not res.get("approved_by"):
+            if _is_pending(_as_dict(r[3])):
                 g["unresolved"] += 1
         out = sorted(groups.values(),
                      key=lambda g: (-_rank.get(g["max_severity"], 0), -g["count"]))
@@ -193,14 +194,16 @@ class PostgresStore:
 
     def finding_stats(self) -> dict[str, int]:
         with self._pool.connection() as conn:
-            total = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
+            total = conn.execute(
+                f"SELECT COUNT(*) FROM findings WHERE {LATEST_ROWS}"
+            ).fetchone()[0]
             fast = conn.execute(
-                "SELECT COUNT(*) FROM findings WHERE path = 'fast_path'"
+                f"SELECT COUNT(*) FROM findings WHERE path = 'fast_path' AND {LATEST_ROWS}"
             ).fetchone()[0]
             rows = conn.execute(
-                "SELECT result FROM findings WHERE path = 'ai_path'"
+                f"SELECT result FROM findings WHERE path = 'ai_path' AND {LATEST_ROWS}"
             ).fetchall()
-        tiebreaks = sum(1 for r in rows if _as_dict(r[0]).get("auto_resolved") is False)
+        tiebreaks = sum(1 for r in rows if _is_pending(_as_dict(r[0])))
         return {"total": total, "fast": fast, "ai": total - fast,
                 "tiebreaks": tiebreaks}
 

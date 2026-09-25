@@ -8,7 +8,7 @@ custom store in tests.
 """
 from core.models.finding import Finding
 from core.triage.rules.base import BaseRule
-from core.triage.rules.dedup_store import fingerprint, get_dedup_store
+from core.triage.rules.dedup_store import fingerprint, get_shared_dedup_store
 
 
 class DedupRule(BaseRule):
@@ -20,7 +20,7 @@ class DedupRule(BaseRule):
     @property
     def store(self):
         if self._store is None:
-            self._store = get_dedup_store()
+            self._store = get_shared_dedup_store()
         return self._store
 
     def match(self, finding: Finding) -> tuple[bool, str]:
