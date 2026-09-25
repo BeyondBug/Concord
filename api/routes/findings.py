@@ -8,8 +8,10 @@ api/routes/scan.py keep working, but every call now reads and writes the
 durable SQLite-backed store instead of an in-memory list.
 """
 import os
+from typing import Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Path, Query
+from pydantic import BaseModel
 
 from core.persistence import FindingRecord, get_store
 
@@ -45,10 +47,43 @@ class _StoreAdapter:
 
 store = _StoreAdapter()
 
+_ID = Path(min_length=1, max_length=200)
 
-@router.get("/")
-async def list_findings(limit: int = 50, severity: str | None = None,
-                        path: str | None = None):
+
+class FindingOut(BaseModel):
+    id: str
+    severity: str
+    artifact: str
+    repo: str
+    source: str
+    path: str
+    agent: str | None
+    result: dict
+    timestamp: str
+
+
+class FindingStats(BaseModel):
+    total: int
+    fast: int
+    ai: int
+    tiebreaks: int
+
+
+class FindingList(BaseModel):
+    findings: list[FindingOut]
+    stats: FindingStats
+    llm_provider: str
+    filters: dict
+
+
+@router.get("/", response_model=FindingList)
+async def list_findings(
+    limit: int = Query(50, ge=1, le=500),
+    severity: Literal["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL",
+                      "critical", "high", "medium", "low", "informational"]
+    | None = None,
+    path: Literal["fast_path", "ai_path"] | None = None,
+):
     return {
         "findings": store.all(limit, severity=severity, path=path),
         "stats": store.stats(),
@@ -64,14 +99,14 @@ async def severity_breakdown():
 
 
 @router.get("/incidents")
-async def incidents(limit: int = 50):
+async def incidents(limit: int = Query(50, ge=1, le=200)):
     """Findings grouped by affected artifact into incident summaries."""
     inc = get_store().incidents(limit=limit)
     return {"incidents": inc, "total": len(inc)}
 
 
 @router.get("/{finding_id}/detail")
-async def finding_detail(finding_id: str):
+async def finding_detail(finding_id: str = _ID):
     """A finding joined with its audit timeline (for the detail panel)."""
     s = get_store()
     f = s.get_finding(finding_id)
@@ -84,12 +119,14 @@ async def finding_detail(finding_id: str):
         "auto_resolved": result.get("auto_resolved"),
         "approved_by": result.get("approved_by"),
         "rejected": result.get("rejected", False),
+        "expired": result.get("expired", False),
+        "skipped_agents": result.get("skipped_agents", {}),
         "timeline": s.audit_for_finding(finding_id),
     }
 
 
-@router.get("/{finding_id}")
-async def get_finding(finding_id: str):
+@router.get("/{finding_id}", response_model=FindingOut)
+async def get_finding(finding_id: str = _ID):
     f = store.get(finding_id)
     if not f:
         raise HTTPException(status_code=404, detail="Finding not found")

@@ -1,9 +1,10 @@
 """Concord FastAPI application."""
+import logging
 import pathlib
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import Depends, FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from api.middleware.auth import auth_is_enforced, require_api_key
 from api.middleware.logging import RequestLoggingMiddleware
@@ -11,6 +12,7 @@ from api.routes import agents, audit, events, findings, scan
 from core.observability.logging_config import configure_logging
 
 configure_logging()
+logger = logging.getLogger("concord.api")
 
 
 @asynccontextmanager
@@ -41,6 +43,23 @@ app.include_router(findings.router, dependencies=[_protected])
 app.include_router(audit.router, dependencies=[_protected])
 app.include_router(scan.router, dependencies=[_protected])
 app.include_router(agents.router, dependencies=[_protected])
+# /events/demo runs the whole pipeline and writes to the store: key-protected.
+app.include_router(events.demo_router, dependencies=[_protected])
+
+
+@app.exception_handler(Exception)
+async def unhandled_error(request: Request, exc: Exception):
+    """Unexpected errors become a JSON 500 that carries the request id.
+
+    The detail is generic on purpose (no stack traces or internals to the
+    client); the full traceback is logged under the same request id.
+    """
+    rid = getattr(request.state, "request_id", "-")
+    logger.error("rid=%s unhandled %s on %s %s", rid, type(exc).__name__,
+                 request.method, request.url.path, exc_info=exc)
+    return JSONResponse(status_code=500,
+                        content={"detail": "Internal server error", "request_id": rid},
+                        headers={"X-Request-ID": rid})
 
 _DASHBOARD = pathlib.Path(__file__).parent / "templates" / "dashboard.html"
 
