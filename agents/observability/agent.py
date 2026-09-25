@@ -65,8 +65,8 @@ class ObservabilityAgent(BaseAgent):
     def source_reliability(self) -> float:
         return 0.80
 
-    async def status(self) -> BackendStatus:
-        return await _STATUS.get(self._probe)
+    async def status(self, fresh: bool = False) -> BackendStatus:
+        return await _STATUS.get(self._probe, fresh=fresh)
 
     async def _probe(self) -> BackendStatus:
         connector, reason = connector_for(self.domain)

@@ -1,0 +1,25 @@
+# HolmesGPT Helm values (chart robusta/holmes) for a local kind cluster backed
+# by the host's Ollama. Checked against HolmesGPT 0.42 (helm/holmes/values.yaml,
+# docs/ai-providers/ollama.md).
+additionalEnvVars:
+  - name: OLLAMA_API_BASE
+    value: "http://host.docker.internal:11434"
+
+modelList:
+  ollama-qwen:                     # Concord sends HOLMES_MODEL=ollama-qwen
+    api_base: "{{ env.OLLAMA_API_BASE }}"
+    model: ollama_chat/qwen2.5:14b
+    temperature: 0
+
+toolsets:
+  kubernetes/core:
+    enabled: true
+  kubernetes/logs:
+    enabled: true
+  # Not present in a bare kind cluster; enabling them only adds failing tools.
+  robusta:
+    enabled: false
+  prometheus/metrics:
+    enabled: false
+  internet:
+    enabled: false

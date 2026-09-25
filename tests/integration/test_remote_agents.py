@@ -225,3 +225,27 @@ def test_agents_endpoint_reports_live_status(tmp_path, monkeypatch):
     assert by["kubernetes"]["endpoint"].endswith("/mcp")
     assert by["observability"]["status"] == "blocked"
     assert d["active"] == 4 and d["blocked"] == 1
+
+
+async def test_status_cache_serves_stale_and_revalidates_in_background():
+    # /agents/ must stay fast for the dashboard even when a probe is slow,
+    # while the orchestrator can still demand a fresh probe.
+    import asyncio
+
+    from agents.base.remote import BackendStatus, StatusCache
+    calls = []
+
+    async def probe():
+        calls.append(1)
+        await asyncio.sleep(0.05)
+        return BackendStatus("active" if len(calls) > 1 else "blocked", f"probe {len(calls)}")
+
+    cache = StatusCache(ttl=0)
+    first = await cache.get(probe)                  # no value yet: waits
+    assert first.detail == "probe 1"
+    stale = await cache.get(probe)                  # expired: returns stale now
+    assert stale.detail == "probe 1"
+    await asyncio.sleep(0.1)                        # background refresh lands
+    assert (await cache.get(probe)).detail in ("probe 2", "probe 3")
+    fresh = await cache.get(probe, fresh=True)      # forced probe
+    assert fresh.active and fresh.detail == f"probe {len(calls)}"

@@ -1,0 +1,7 @@
+# Local cluster for Concord's external agents (kagent + HolmesGPT).
+# kind create cluster --config infra/local-agents/kind-config.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: concord
+nodes:
+  - role: control-plane

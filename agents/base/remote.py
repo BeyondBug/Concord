@@ -14,7 +14,7 @@ import asyncio
 import logging
 import os
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from core.credential_broker import CredentialBroker
 from core.manifest import load_manifest
@@ -35,6 +35,7 @@ class BackendStatus:
     detail: str             # human-readable reason / what was verified
     connector: str | None = None
     url: str | None = None
+    checked_at: float = field(default_factory=time.time)   # epoch seconds
 
     @property
     def active(self) -> bool:
@@ -65,24 +66,39 @@ def transport() -> SecureTransport:
 
 
 class StatusCache:
-    """Caches probe results briefly so dashboard polling cannot hammer backends."""
+    """Probe results, cached so dashboard polling cannot hammer backends.
+
+    Stale-while-revalidate: once a result exists, callers get it immediately
+    (``checked_at`` says how old it is) while an expired entry is re-probed
+    in the background. Only the very first call waits for a probe. Callers
+    that must act on fresh state (the orchestrator, before invoking an agent)
+    pass ``fresh=True``.
+    """
 
     def __init__(self, ttl: float = _STATUS_TTL_SECONDS):
         self.ttl = ttl
         self._value: BackendStatus | None = None
         self._at = 0.0
         self._lock = asyncio.Lock()
+        self._refresh: asyncio.Task | None = None
 
-    async def get(self, probe) -> BackendStatus:
+    async def get(self, probe, fresh: bool = False) -> BackendStatus:
+        if fresh or self._value is None:
+            return await self._probe(probe)
+        if time.monotonic() - self._at >= self.ttl and (
+                self._refresh is None or self._refresh.done()):
+            self._refresh = asyncio.create_task(self._probe(probe))
+        return self._value
+
+    async def _probe(self, probe) -> BackendStatus:
         async with self._lock:
-            if self._value is not None and time.monotonic() - self._at < self.ttl:
-                return self._value
-            self._value = await probe()
-            self._at = time.monotonic()
-            return self._value
+            value = await probe()
+            self._value, self._at = value, time.monotonic()
+            return value
 
     def clear(self) -> None:
         self._value = None
+        self._refresh = None
 
 
 def blocked(detail: str, connector: ConnectorConfig | None = None) -> BackendStatus:

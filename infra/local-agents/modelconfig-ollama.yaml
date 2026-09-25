@@ -1,0 +1,20 @@
+# Standalone ModelConfig for kagent pointing at the host's Ollama.
+# Equivalent to what kagent-values.yaml renders as "default-model-config";
+# apply this one if kagent was installed with another provider and you want
+# to point an agent at Ollama without reinstalling:
+#   kubectl apply -f infra/local-agents/modelconfig-ollama.yaml
+#   kubectl -n kagent patch agent k8s-agent --type merge \
+#     -p '{"spec":{"declarative":{"modelConfig":"ollama-qwen25"}}}'
+# Schema: kagent.dev/v1alpha2 ModelConfig (go/api/v1alpha2/modelconfig_types.go).
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: ollama-qwen25
+  namespace: kagent
+spec:
+  provider: Ollama
+  model: "qwen2.5:14b"
+  ollama:
+    host: host.docker.internal:11434
+    options:
+      num_ctx: "32768"

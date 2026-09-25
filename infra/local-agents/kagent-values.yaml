@@ -1,0 +1,38 @@
+# kagent Helm values for a local kind cluster backed by the host's Ollama.
+# Checked against kagent v0.10.2 (helm/kagent/values.yaml, templates/modelconfig.yaml).
+#
+# The chart renders `providers.<default>` into the ModelConfig
+# "default-model-config", which k8s-agent uses unless modelConfigRef is set.
+providers:
+  default: ollama
+  ollama:
+    provider: Ollama
+    model: "qwen2.5:14b"          # tool-calling model; `ollama pull qwen2.5:14b`
+    config:
+      # Pods reach the Windows/macOS host through Docker Desktop's DNS name.
+      host: host.docker.internal:11434
+      options:
+        num_ctx: "32768"
+
+# Only the agent Concord calls. Every other bundled agent is a pod that a local
+# 14B model does not need to compete with.
+k8s-agent:
+  enabled: true
+kgateway-agent:
+  enabled: false
+istio-agent:
+  enabled: false
+promql-agent:
+  enabled: false
+observability-agent:
+  enabled: false
+argo-rollouts-agent:
+  enabled: false
+helm-agent:
+  enabled: false
+cilium-policy-agent:
+  enabled: false
+cilium-manager-agent:
+  enabled: false
+cilium-debug-agent:
+  enabled: false

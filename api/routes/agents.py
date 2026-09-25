@@ -37,6 +37,7 @@ class AgentInfo(BaseModel):
     status: str               # "active" | "blocked"
     detail: str
     endpoint: str | None = None
+    checked_at: float | None = None   # epoch seconds of the probe (external only)
 
 
 class AgentList(BaseModel):
@@ -51,15 +52,17 @@ async def agent_list() -> list[AgentInfo]:
     async def describe(agent) -> AgentInfo:
         status_fn = getattr(agent, "status", None)
         if status_fn is None:
-            kind, state, detail, endpoint = "builtin", "active", "runs in-process", None
+            kind, state, detail, endpoint, at = ("builtin", "active", "runs in-process",
+                                                 None, None)
         else:
             st = await status_fn()
-            kind, state, detail, endpoint = "external", st.state, st.detail, st.url
+            kind, state, detail, endpoint, at = ("external", st.state, st.detail,
+                                                 st.url, st.checked_at)
         return AgentInfo(
             domain=agent.domain,
             reliability=SOURCE_RELIABILITY.get(agent.domain, agent.source_reliability),
             backing=_BACKING.get(agent.domain, agent.domain),
-            kind=kind, status=state, detail=detail, endpoint=endpoint,
+            kind=kind, status=state, detail=detail, endpoint=endpoint, checked_at=at,
         )
 
     # Probe external backends concurrently so one slow endpoint doesn't add up.

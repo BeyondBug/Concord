@@ -136,7 +136,7 @@ class Orchestrator:
             domain = agent.domain
             status_fn = getattr(agent, "status", None)
             if status_fn is not None:
-                status = await status_fn()
+                status = await status_fn(fresh=True)   # act on current state
                 if not status.active:
                     logger.warning("[%s]  skipped — %s", domain.upper(), status.detail)
                     return domain, None, f"blocked: {status.detail}"
