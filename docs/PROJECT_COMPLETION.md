@@ -30,8 +30,8 @@ state. Evidence and bug list: `docs/AUDIT.md`.
 | Orchestrator | DONE | 5 agents concurrently, blocked/failing agents skipped with reason, candidates + analyses stored |
 | Built-in scanners (Terraform, K8s, source) | DONE | regex scanners, not TerraSecure/Trivy/Checkov |
 | Infra / CI-CD / Security agents | DONE | run the built-in scanners |
-| Kubernetes agent (kagent MCP) | **BLOCKED** | client + gating done and contract-tested; no cluster (kind missing, Docker stopped) |
-| Observability agent (HolmesGPT) | **BLOCKED** | same |
+| Kubernetes agent (kagent MCP) | PARTIAL | live: cluster + kagent 0.10.2 installed, agent active, executes k8s tools for Concord; full answer exceeds 300 s on a 4 GB laptop GPU (`docs/AGENTS_SETUP.md`) |
+| Observability agent (HolmesGPT) | PARTIAL | live: installed, `/readyz` 200, receives Concord's questions; answers exceed 300 s on the same hardware |
 | Repository scan | DONE | one finding per commit, audited, errors surfaced |
 | Persistence (SQLite / Postgres) | DONE / PARTIAL | Postgres code path unit-tested; not run against a live Postgres here |
 | Audit trail (correlation ids) | DONE | every decision incl. fast path, re-scans, approvals |

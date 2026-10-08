@@ -249,3 +249,17 @@ async def test_status_cache_serves_stale_and_revalidates_in_background():
     assert (await cache.get(probe)).detail in ("probe 2", "probe 3")
     fresh = await cache.get(probe, fresh=True)      # forced probe
     assert fresh.active and fresh.detail == f"probe {len(calls)}"
+
+
+async def test_k8s_rejects_kagent_task_json_fallback(tmp_path, monkeypatch):
+    # Regression: when the kagent agent produced no text, the controller
+    # returned the raw A2A task JSON (which echoes our prompt) and Concord
+    # recorded it as the analysis.
+    import json as _json
+    raw = _json.dumps({"kind": "task", "status": {"state": "working"},
+                       "history": [{"role": "user", "parts": [{"text": "ROOT CAUSE: <1-3"}]}]})
+    app, _ = kagent_like_server(answer=raw)
+    with serve(app) as base:
+        _manifest(tmp_path, monkeypatch, kagent_url=base + "/mcp")
+        with pytest.raises(RuntimeError, match="no answer text.*working"):
+            await KubernetesAgent().analyze(_finding())

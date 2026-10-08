@@ -103,7 +103,9 @@ def _die_unreachable(exc: Exception) -> None:
 
 
 def _emit_json(obj) -> None:
-    con.print_json(_json.dumps(obj))
+    # Plain stdout, never through Rich: FORCE_COLOR (common in CI) would
+    # otherwise inject ANSI codes and break `--json | jq`.
+    print(_json.dumps(obj, indent=2))
 
 
 def _sev(sev: str) -> str:

@@ -281,3 +281,14 @@ def test_diagnostics_healthy_ignores_optional_checks(monkeypatch):
     d = json.loads(result.stdout)
     assert d["healthy"] is True
     assert any(c["name"] == "Agent kubernetes" and not c["ok"] for c in d["checks"])
+
+
+def test_json_output_stays_pure_with_force_color(monkeypatch):
+    # Regression: --json went through Rich, so FORCE_COLOR=1 added ANSI codes
+    # and the output was no longer parseable JSON.
+    from rich.console import Console
+    monkeypatch.setattr(cli, "con", Console(force_terminal=True, color_system="truecolor"))
+    monkeypatch.setattr(cli, "_api_get", lambda *a, **k: {"status": "ok", "n": [1, 2]})
+    result = runner.invoke(cli.app, ["health", "--json"])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == {"status": "ok", "n": [1, 2]}

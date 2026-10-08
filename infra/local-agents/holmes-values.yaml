@@ -8,7 +8,7 @@ additionalEnvVars:
 modelList:
   ollama-qwen:                     # Concord sends HOLMES_MODEL=ollama-qwen
     api_base: "{{ env.OLLAMA_API_BASE }}"
-    model: ollama_chat/qwen2.5:14b
+    model: ollama_chat/qwen3.5:4b     # fits a 4 GB GPU; qwen2.5:14b is CPU-bound there
     temperature: 0
 
 toolsets:

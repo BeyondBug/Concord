@@ -1,6 +1,6 @@
 # Concord — local kagent + HolmesGPT setup (Windows / PowerShell).
 #
-# Creates a kind cluster, installs kagent (Ollama provider -> host qwen2.5:14b)
+# Creates a kind cluster, installs kagent (Ollama provider -> host qwen3.5:4b)
 # and HolmesGPT, and checks each step. Port-forwards are printed at the end
 # because they must keep running in their own terminals.
 #
@@ -10,7 +10,7 @@
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent $PSScriptRoot
 $Vals = Join-Path $Root 'infra/local-agents'
-$Model = 'qwen2.5:14b'
+$Model = 'qwen3.5:4b'
 $KagentVersion = '0.10.2'   # the kagent release Concord's client was checked against
 
 function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }

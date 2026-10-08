@@ -26,6 +26,15 @@ def _repo_manifest(monkeypatch):
     monkeypatch.setenv("CONCORD_MANIFEST", os.path.abspath(_REPO_MANIFEST))
 
 
+def _assert_real_answer(resp):
+    # A length check once "passed" on kagent's raw task JSON, which echoes our
+    # own prompt template. Require text that is neither JSON nor the template.
+    answer = resp.metadata["answer"]
+    assert not answer.lstrip().startswith("{"), answer[:200]
+    assert "<1-3 sentences" not in answer and "<what you observed" not in answer
+    assert len(resp.root_cause) > 20
+
+
 def _finding():
     return Finding(id="LIVE-1", source="live-test", artifact="k8s/",
                    severity="HIGH", title="Workloads may run privileged or unpinned",
@@ -42,7 +51,8 @@ async def test_live_kagent_answers():
         pytest.skip(f"kagent not live: {st.detail}")
     resp = await agent.analyze(_finding())
     print("\nkagent root cause:", resp.root_cause, "\nfix:", resp.suggested_fix)
-    assert resp.metadata["backend"] == "kagent" and len(resp.metadata["answer"]) > 20
+    assert resp.metadata["backend"] == "kagent"
+    _assert_real_answer(resp)
 
 
 async def test_live_holmes_answers():
@@ -53,4 +63,5 @@ async def test_live_holmes_answers():
         pytest.skip(f"HolmesGPT not live: {st.detail}")
     resp = await agent.analyze(_finding())
     print("\nHolmesGPT root cause:", resp.root_cause, "\nfix:", resp.suggested_fix)
-    assert resp.metadata["backend"] == "holmesgpt" and len(resp.metadata["answer"]) > 20
+    assert resp.metadata["backend"] == "holmesgpt"
+    _assert_real_answer(resp)

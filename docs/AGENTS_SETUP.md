@@ -1,20 +1,62 @@
 # External agents: kagent (Kubernetes) and HolmesGPT (Observability)
 
-**Status: BLOCKED on this machine** — `kind` is not installed and the Docker
-daemon is not running, so no cluster exists and neither backend has been
-verified live. Concord's client code, wiring and fail-safe gating are done and
-tested against real protocol servers; everything below marked *not yet run* is
-the exact remaining work.
+**Status (2026-10-08): installed and connected; answers limited by local
+hardware.** On the dev laptop (16 CPUs, 32 GB RAM, RTX 3050 Laptop 4 GB) the
+kind cluster, kagent 0.10.2 and HolmesGPT run, both agents report **active**
+from live probes, and both receive Concord's requests and work on them — but
+neither has yet returned a complete answer within the 300 s agent limit,
+because the local model runs mostly on CPU.
 
 | Piece | State | Evidence |
 |---|---|---|
-| kagent MCP client (`agents/kubernetes/kagent_client.py`) | DONE | contract tests vs a real MCP SDK server — `tests/integration/test_remote_agents.py` |
-| KubernetesAgent (`agents/kubernetes/agent.py`) | DONE, gated | live probe → `active` only when `list_agents` shows `kagent/k8s-agent` |
-| HolmesGPT client + ObservabilityAgent | DONE, gated | `/readyz` probe; `/api/chat` contract tests |
-| Orchestrator + manifest wiring | DONE | `connectors/tools.yaml` (`kagent`, `holmesgpt`), `test_orchestrator_includes_live_backends` |
-| Dashboard / CLI show `blocked` + reason | DONE | verified live, output below |
-| kind cluster, kagent install, HolmesGPT install | **NOT RUN** — prerequisites missing | §3 |
-| End-to-end with real kagent / HolmesGPT | **NOT VERIFIED** | `tests/integration/test_live_agents.py` skips (output below) |
+| kind cluster `concord`, kagent 0.10.2, HolmesGPT | DONE | `scripts/setup_local_agents.ps1` completed (§4) |
+| Pods → host Ollama networking | DONE | in-cluster probe returned `{"version":"0.35.1"}` |
+| kagent MCP endpoint | DONE, live | real `initialize` reply: `serverInfo: kagent-agents 0.10.2`, protocol `2025-06-18` |
+| HolmesGPT endpoint | DONE, live | `GET /readyz` → 200 |
+| Concord status | DONE, live | `concord agents`: 5 active / 0 blocked; dashboard shows all 5 green |
+| kagent executes Concord's task | DONE, live | k8s-agent log: `k8s_get_resources`, `k8s_get_events`, `k8s_describe_resource` run against the cluster |
+| HolmesGPT executes Concord's question | DONE, live | Holmes log shows the delimited prompt and `LiteLLM completion() model=qwen…` |
+| Complete answer back within 300 s | **NOT YET** | both time out (`timed out after 300s` on the CRMS scan, 2026-10-08) |
+| Contract tests (real MCP SDK server) | DONE | `tests/integration/test_remote_agents.py` |
+
+### Why answers time out on this laptop
+
+Measured with Ollama directly (`/api/chat`, one-sentence prompt):
+
+| Model | Placement (`ollama ps`) | Speed |
+|---|---|---|
+| `qwen2.5:14b` (num_ctx 32768) | 15 GB, 86% CPU / 14% GPU | each agent step ~2–3 min |
+| `qwen3.5:4b` (num_ctx 8192) | 3.9 GB, 54% CPU / 46% GPU | 12–15 tok/s; with thinking on, ~2,000 hidden tokens (≈160 s) per step |
+
+A kagent / HolmesGPT investigation takes several model steps, so on a 4 GB GPU
+it needs well over 5 minutes. The setup now uses `qwen3.5:4b` (the 14B model
+was CPU-bound). Options, in order of effect:
+
+1. Run Ollama on a machine with ≥ 12 GB VRAM (point
+   `providers.ollama.config.host` / `OLLAMA_API_BASE` at it), or use a hosted
+   provider (`providers.default` in `kagent-values.yaml`, `modelList` in
+   `holmes-values.yaml`).
+2. Close other GPU users (3.5 GB of the 4 GB was already in use).
+3. Raise the limits for local experiments: `timeout_seconds` in
+   `connectors/tools.yaml` and `CONCORD_AGENT_TIMEOUT` (seconds).
+
+A timeout is recorded on the finding as a skipped agent; it never fails a
+scan. If kagent ends without text, its controller returns the raw A2A task
+JSON — Concord now rejects that instead of storing it as an analysis
+(`test_k8s_rejects_kagent_task_json_fallback`).
+
+### Port-forwards
+
+`kubectl port-forward` stops when Docker/the laptop restarts or the pod is
+replaced (e.g. after `helm upgrade`). Restart both before using the agents:
+
+```powershell
+kubectl -n kagent port-forward svc/kagent-controller 8083:8083
+kubectl -n holmes port-forward svc/holmesgpt-holmes 5050:80
+```
+
+When they are down, Concord reports both agents **blocked** with the reason
+and the other three agents still run.
 
 ## 1. The real contracts (verified against source)
 
@@ -42,7 +84,7 @@ MCP server (it consumes MCP servers as toolsets). `GET /healthz`, `GET /readyz`,
 `<release>-holmes`, port 80 → container 5050. Models come from `modelList`;
 Ollama via LiteLLM `ollama_chat/<model>` + `OLLAMA_API_BASE`.
 
-## 2. Commands run here and their real output
+## 2. Commands run before setup (2026-09-25) and their real output
 
 ### 2.1 Prerequisite check (PowerShell)
 
@@ -112,9 +154,9 @@ SKIPPED tests\integration\test_live_agents.py:53: HolmesGPT not live: HolmesGPT 
 2 skipped
 ```
 
-## 3. Remaining steps (not yet run)
+## 3. Setup steps (run on 2026-10-06)
 
-### 3.1 What I need from you
+### 3.1 Prerequisites (were missing on 2026-09-25)
 
 1. Install kind: `winget install --id Kubernetes.kind -e`
 2. Start **Docker Desktop** and wait until `docker info` succeeds.
@@ -180,3 +222,41 @@ AI-path finding shows "Kubernetes" / "Observability" analysis cards.
 - **Plaintext refused** (`InsecureTransportError`): port-forwards are
   `http://`; set `CONCORD_ALLOW_INSECURE_TRANSPORT=1` (dev only). In a real
   deployment put TLS in front and use `https://` + the manifest `tls:` block.
+
+## 4. Setup run on 2026-10-06 (real output, abridged)
+
+```
+$ winget install --id Kubernetes.kind -e
+Downloading https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-windows-amd64
+Successfully verified installer hash
+Successfully installed
+
+$ powershell -ExecutionPolicy Bypass -File scripts/setup_local_agents.ps1
+==> Checking prerequisites
+kind, kubectl, helm, docker, ollama (qwen2.5:14b) OK
+==> Creating kind cluster "concord" (skipped if it exists)
+==> Checking pods can reach the host Ollama (host.docker.internal:11434)
+{"version":"0.35.1"}pod "ollama-probe" deleted from default namespace
+==> Installing kagent CRDs + kagent 0.10.2 (Ollama provider)
+Pulled: ghcr.io/kagent-dev/kagent/helm/kagent-crds:0.10.2
+STATUS: deployed
+Pulled: ghcr.io/kagent-dev/kagent/helm/kagent:0.10.2
+STATUS: deployed
+modelconfig.kagent.dev/ollama-qwen25 created
+default-model-config   Ollama     qwen2.5:14b
+agent.kagent.dev/k8s-agent condition met
+==> Installing HolmesGPT (robusta/holmes) with the Ollama model list
+STATUS: deployed
+holmesgpt-holmes-56c7bc9487-889xz   1/1     Running   0          2m21s
+
+$ concord agents
+infra          active   runs in-process
+cicd           active   runs in-process
+security       active   runs in-process
+kubernetes     active   kagent MCP ok; agent kagent/k8s-agent ready
+observability  active   HolmesGPT /readyz ok
+```
+
+The models were then switched to `qwen3.5:4b` (`helm upgrade` with the current
+values files); `kubectl -n kagent get modelconfig` shows
+`default-model-config  Ollama  qwen3.5:4b`.

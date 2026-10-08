@@ -20,6 +20,7 @@ config         : connector ``kagent`` in connectors/tools.yaml;
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 
@@ -72,6 +73,28 @@ def split_answer(text: str) -> tuple[str, str]:
     return text.strip(), "See the full agent analysis above."
 
 
+def unanswered_task_state(text: str) -> str | None:
+    """Detect kagent's fallback when the agent produced no text.
+
+    The controller's invoke_agent returns ``json.Marshal(task)`` when the A2A
+    result has no text parts (e.g. the run was cut off or ended in
+    input-required). That JSON echoes our own prompt back, so it must never
+    be mistaken for an analysis. Returns the task state, or None for a real
+    answer.
+    """
+    if not text.startswith("{"):
+        return None
+    try:
+        obj = json.loads(text)
+    except ValueError:
+        return None
+    if isinstance(obj, dict) and ("history" in obj or "status" in obj):
+        status = obj.get("status")
+        state = status.get("state") if isinstance(status, dict) else None
+        return str(state or "unknown")
+    return None
+
+
 class KubernetesAgent(BaseAgent):
 
     @property
@@ -119,6 +142,10 @@ class KubernetesAgent(BaseAgent):
         text = (answer.get("text") or "").strip()
         if not text:
             raise RuntimeError(f"kagent agent {ref} returned an empty answer")
+        state = unanswered_task_state(text)
+        if state is not None:
+            raise RuntimeError(f"kagent agent {ref} produced no answer text "
+                               f"(A2A task state: {state})")
         root_cause, fix = split_answer(text)
         return AgentResponse(
             agent=self.domain,

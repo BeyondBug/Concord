@@ -152,7 +152,8 @@ class Orchestrator:
                 return domain, None, f"timed out after {AGENT_TIMEOUT_SECONDS:.0f}s"
             except Exception as exc:  # noqa: BLE001 - one agent must not sink the scan
                 logger.error("[%s]  error: %s", domain.upper(), exc)
-                return domain, None, f"error: {exc}"[:300]
+                # Some exceptions (httpx.ReadTimeout) have an empty message.
+                return domain, None, f"error: {exc or type(exc).__name__}"[:300]
             # Deterministic confidence — never the agent's or an LLM's opinion.
             resp.confidence_score = compute_confidence(domain, finding.severity)
             logger.info("[%s]  confidence=%.4f  %s", domain.upper(),
