@@ -8,6 +8,7 @@ import hmac
 import json
 import logging
 import os
+import re
 from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, Request
@@ -78,6 +79,8 @@ async def github_webhook(request: Request, background_tasks: BackgroundTasks):
         # Nothing to analyze (e.g. branch deletion). Say so instead of inventing
         # a placeholder finding.
         return {"status": "ignored", "reason": "no head_commit in payload", "repo": repo}
+    if not re.fullmatch(r"[0-9a-fA-F]{7,64}", sha):
+        raise HTTPException(status_code=400, detail="head_commit.id is not a commit SHA")
 
     modified = commit.get("modified") or commit.get("added") or []
     finding = Finding(

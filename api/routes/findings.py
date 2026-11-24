@@ -13,6 +13,7 @@ from typing import Literal
 from fastapi import APIRouter, HTTPException, Path, Query
 from pydantic import BaseModel
 
+from core.models.finding import ID_MAX_LEN, ID_PATTERN
 from core.persistence import FindingRecord, get_store
 
 router = APIRouter(prefix="/findings", tags=["findings"])
@@ -47,7 +48,7 @@ class _StoreAdapter:
 
 store = _StoreAdapter()
 
-_ID = Path(min_length=1, max_length=200)
+_ID = Path(min_length=1, max_length=ID_MAX_LEN, pattern=ID_PATTERN)
 
 
 class FindingOut(BaseModel):
