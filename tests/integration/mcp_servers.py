@@ -69,6 +69,7 @@ def kagent_like_server(ready_agents=("kagent/k8s-agent",), answer=None,
                        fail_invoke=False):
     """An MCP server with kagent's list_agents / invoke_agent contract."""
     from mcp.server.mcpserver import MCPServer
+    from mcp.server.mcpserver.exceptions import ToolError
 
     calls: list[dict] = []
     server = MCPServer("kagent-agents")
@@ -84,7 +85,8 @@ def kagent_like_server(ready_agents=("kagent/k8s-agent",), answer=None,
                      ) -> InvokeAgentOutput:
         calls.append({"agent": agent, "task": task})
         if fail_invoke:
-            raise ValueError("Failed to send A2A message: agent not reachable")
+            # ToolError: mcp>=2.3 masks the text of any other exception type.
+            raise ToolError("Failed to send A2A message: agent not reachable")
         text = answer or ("ROOT CAUSE: pod default/web runs privileged.\n"
                           "FIX: kubectl patch deploy web ...")
         return InvokeAgentOutput(agent=agent, text=text, context_id="ctx-1")
