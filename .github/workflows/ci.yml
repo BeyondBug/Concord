@@ -18,10 +18,13 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Codecov OIDC upload
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.11"
           cache: pip
@@ -36,4 +39,12 @@ jobs:
       - name: Test (full suite, excluding slow)
         env:
           CONCORD_DB_PATH: ":memory:"
-        run: pytest tests/ -q -m "not slow"
+        run: pytest tests/ -q -m "not slow" --cov=api --cov=core --cov=agents --cov=concord_cli --cov-report=xml
+
+      # Tokenless upload via OIDC; does not fail CI if Codecov is unreachable.
+      - name: Upload coverage
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: coverage.xml
+          use_oidc: ${{ !(github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork) }}
+          fail_ci_if_error: false
