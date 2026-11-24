@@ -74,3 +74,30 @@ def test_every_route_the_clients_call_is_in_the_spec(source):
     patterns = [_template_regex(p) for p in SPEC["paths"]]
     uncovered = {u for u in urls if not any(rx.match(u) for rx in patterns)}
     assert not uncovered, f"{source} calls routes missing from openapi.yaml: {uncovered}"
+
+
+def test_real_responses_match_the_spec_schemas(monkeypatch):
+    """What the server returns today must validate against the contract."""
+    import jsonschema
+    from fastapi.testclient import TestClient
+
+    from api.main import app
+    monkeypatch.delenv("CONCORD_API_KEY", raising=False)
+    schemas = SPEC["components"]["schemas"]
+
+    def check(name, instance):
+        v = jsonschema.Draft202012Validator(
+            {"$ref": f"#/components/schemas/{name}", "components": {"schemas": schemas}})
+        errors = [f"{list(e.path)}: {e.message}" for e in v.iter_errors(instance)]
+        assert not errors, f"{name}: {errors[:3]}"
+
+    with TestClient(app) as c:
+        for sev in ["CRITICAL", "LOW"]:
+            check("AnalysisResult", c.post("/events/demo", params={"severity": sev}).json())
+        check("FindingList", c.get("/findings/").json())
+        check("FindingDetail", c.get("/findings/DEMO-IAM-CRITICAL/detail").json())
+        check("AgentList", c.get("/agents/").json())
+        check("Health", c.get("/health").json())
+        check("ScanState", c.get("/events/scan-status").json())
+        for entry in c.get("/audit/").json()["entries"]:
+            check("AuditEntry", entry)

@@ -811,19 +811,24 @@ components:
       description: |
         The decision for a finding. Fields beyond `path` depend on the path
         and on what happened afterwards (approval, rejection, expiry).
-        `analyses` is required on the AI path, where agents ran.
+        On the AI path there are two shapes: no agent could run (`error` is
+        set and `auto_resolved` is null), or agents ran and were arbitrated,
+        in which case `agent`, `agents` and `analyses` are all required.
       required: [path]
       if:
+        required: [path]
         properties: {path: {const: ai_path}}
-        required: [agents]
+        not: {required: [error]}
       then:
-        required: [path, analyses]
+        required: [path, agent, agents, analyses]
       properties:
         path: {$ref: "#/components/schemas/DecisionPath"}
         reason: {type: string}
         agent: {type: [string, "null"], description: The winning agent, if any.}
         score: {type: number}
-        auto_resolved: {type: boolean}
+        gap: {type: number, description: Score gap between the top two candidates.}
+        error: {type: string, description: 'Set when no agent could run, for example "no agent responses".'}
+        auto_resolved: {type: [boolean, "null"], description: Null when no agent could run.}
         needs_approval: {type: boolean}
         agents:
           type: object
