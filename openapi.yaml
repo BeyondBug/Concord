@@ -823,6 +823,12 @@ components:
             not: {required: [error]}
           then:
             required: [agent, agents, analyses]
+        # No agent could run: nothing was decided.
+        - if:
+            required: [error]
+          then:
+            required: [auto_resolved]
+            properties: {auto_resolved: {type: "null"}}
         # Naming a winner means agents ran, so the two shapes cannot mix.
         - if:
             required: [agent]
@@ -1065,6 +1071,11 @@ components:
     WebhookAccepted:
       type: object
       required: [status]
+      if:
+        required: [status]
+        properties: {status: {const: queued}}
+      then:
+        required: [job_id]
       properties:
         status:
           type: string
