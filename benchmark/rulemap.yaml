@@ -1,0 +1,11 @@
+# Maps each scanner's rule IDs to a benchmark issue class, so results from
+# different tools can be compared against the same labels.
+#
+#   <tool name as in SARIF runs[].tool.driver.name, any case>:
+#     <ruleId>: <class>
+#
+# A rule missing here is reported in the "unmapped" bucket, never silently
+# counted. Filled in as each repository is labeled.
+checkov: {}
+trivy: {}
+semgrep: {}

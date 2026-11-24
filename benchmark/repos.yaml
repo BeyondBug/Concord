@@ -1,0 +1,30 @@
+# Benchmark corpus. Every external repository is pinned to an exact commit so
+# scores are reproducible. `kind: clean` means any alert there is a false
+# positive. Fetch with: python -m benchmark.fetch
+repos:
+  - name: terragoat
+    url: https://github.com/bridgecrewio/terragoat
+    commit: 729f8da62c6a85ce4af5ad3d123de97776d954c4
+    license: Apache-2.0
+    kind: vulnerable
+    covers: Terraform (AWS, Azure, GCP)
+
+  - name: kubernetes-goat
+    url: https://github.com/madhuakula/kubernetes-goat
+    commit: 723a0db478f050d173d23b4ce5044b65bce0bdd0
+    license: MIT
+    kind: vulnerable
+    covers: Kubernetes manifests, Helm, Dockerfiles
+
+  - name: pygoat
+    url: https://github.com/adeyosemanputra/pygoat
+    commit: 2aa4cc14f251e4a780e94e200aed6b36a5b15c21
+    license: MIT
+    kind: vulnerable
+    covers: Python/Django application code
+
+  - name: clean-terraform
+    path: benchmark/fixtures/clean-terraform
+    license: Apache-2.0
+    kind: clean
+    covers: Hardened Terraform written for this benchmark

@@ -49,3 +49,6 @@ concord.db-shm
 *.sqlite3
 # Scanned target repositories (cloned by the scan route) — never committed
 repos/
+
+# Benchmark repos fetched by benchmark/fetch.py
+.bench/
