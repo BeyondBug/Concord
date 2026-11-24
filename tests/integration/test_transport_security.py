@@ -95,8 +95,15 @@ def test_verify_uses_ca_bundle(tmp_path):
         _build_verify(ConnectorTLS(ca_bundle=missing))
 
 
-def test_verify_can_be_disabled_explicitly():
+def test_verify_can_be_disabled_explicitly(monkeypatch):
+    monkeypatch.setenv("CONCORD_ALLOW_INSECURE_TRANSPORT", "1")
     assert _build_verify(ConnectorTLS(verify=False)) is False
+
+
+def test_disabling_verify_needs_insecure_opt_in(monkeypatch):
+    monkeypatch.delenv("CONCORD_ALLOW_INSECURE_TRANSPORT", raising=False)
+    with pytest.raises(InsecureTransportError, match="tls.verify=false"):
+        _build_verify(ConnectorTLS(verify=False))
 
 
 def test_mtls_cert_tuple_built():

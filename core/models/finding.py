@@ -3,6 +3,10 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+# Finding IDs end up in URLs, logs and audit records: only these characters.
+ID_PATTERN = r"^[A-Za-z0-9._:-]+$"
+ID_MAX_LEN = 200
+
 
 @dataclass
 class Finding:
