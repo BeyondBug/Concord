@@ -1,0 +1,1018 @@
+openapi: 3.1.0
+info:
+  title: Concord API
+  version: 0.2.0
+  summary: Triage security findings, arbitrate agent results, keep a human in the loop.
+  description: |
+    The contract for Concord's HTTP API. It describes the routes the Python
+    server serves today and the corrected design the Go rewrite must meet.
+
+    Every operation carries two extensions:
+
+    - `x-concord-status`: `current` (served today, as described), `changed`
+      (served today, but this spec describes the fixed behaviour that the Go
+      version implements), or `planned` (not served yet).
+    - `x-concord-issue`: the roadmap issue (GitHub issue number) that builds or fixes it.
+
+    Paths stay as they are today so the existing dashboard and CLI keep working
+    against the Go server. Errors use FastAPI's shape: `{"detail": ...}`.
+  license:
+    name: Apache-2.0
+    identifier: Apache-2.0
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+
+tags:
+  - name: health
+  - name: findings
+  - name: approvals
+  - name: scans
+  - name: ingest
+  - name: audit
+  - name: agents
+
+# Default: every operation needs a credential. Public routes override with [].
+security:
+  - apiKey: []
+  - bearer: []
+
+paths:
+  /:
+    get:
+      tags: [health]
+      operationId: dashboard
+      summary: Web dashboard (HTML)
+      security: []
+      x-concord-status: current
+      x-concord-issue: 59
+      responses:
+        "200":
+          description: The dashboard page.
+          content:
+            text/html:
+              schema: {type: string}
+
+  /health:
+    get:
+      tags: [health]
+      operationId: health
+      summary: Liveness and auth posture
+      security: []
+      x-concord-status: current
+      responses:
+        "200":
+          description: The process is up.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Health"}
+
+  /version:
+    get:
+      tags: [health]
+      operationId: version
+      summary: Service version
+      security: []
+      x-concord-status: current
+      responses:
+        "200":
+          description: Version info.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [service, version]
+                properties:
+                  service: {type: string, const: concord}
+                  version: {type: string}
+
+  /ready:
+    get:
+      tags: [health]
+      operationId: ready
+      summary: Readiness, including a database round trip
+      security: []
+      x-concord-status: planned
+      x-concord-issue: 83
+      responses:
+        "200":
+          description: Ready to serve traffic.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Readiness"}
+        "503":
+          description: A dependency (such as the database) is unavailable.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Readiness"}
+
+  /findings/:
+    get:
+      tags: [findings]
+      operationId: listFindings
+      summary: Recent findings with summary stats
+      x-concord-status: changed
+      x-concord-issue: 67
+      x-concord-role: viewer
+      description: |
+        Changed: each finding gains `fingerprint`, `state` and `assignee`
+        (one finding per violation, step 16), and the list can filter on `state`.
+      parameters:
+        - $ref: "#/components/parameters/Limit500"
+        - name: severity
+          in: query
+          schema: {$ref: "#/components/schemas/Severity"}
+        - name: path
+          in: query
+          schema: {$ref: "#/components/schemas/DecisionPath"}
+        - name: state
+          in: query
+          schema: {$ref: "#/components/schemas/FindingState"}
+      responses:
+        "200":
+          description: Findings, newest first.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FindingList"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+
+  /findings/severity:
+    get:
+      tags: [findings]
+      operationId: severityBreakdown
+      summary: Finding counts by severity
+      x-concord-status: current
+      x-concord-role: viewer
+      responses:
+        "200":
+          description: Counts keyed by severity.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [by_severity]
+                properties:
+                  by_severity:
+                    type: object
+                    additionalProperties: {type: integer, minimum: 0}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  /findings/incidents:
+    get:
+      tags: [findings]
+      operationId: listIncidents
+      summary: Findings grouped by affected artifact
+      x-concord-status: current
+      x-concord-role: viewer
+      parameters:
+        - $ref: "#/components/parameters/Limit500"
+      responses:
+        "200":
+          description: One incident per artifact.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [incidents, total]
+                properties:
+                  incidents:
+                    type: array
+                    items: {$ref: "#/components/schemas/Incident"}
+                  total: {type: integer, minimum: 0}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+
+  /findings/{finding_id}:
+    parameters:
+      - $ref: "#/components/parameters/FindingId"
+    get:
+      tags: [findings]
+      operationId: getFinding
+      summary: One finding
+      x-concord-status: current
+      x-concord-role: viewer
+      responses:
+        "200":
+          description: The latest record for this finding.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Finding"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+    patch:
+      tags: [findings]
+      operationId: updateFinding
+      summary: Change a finding's state or assignee
+      x-concord-status: planned
+      x-concord-issue: 67
+      x-concord-role: triager
+      description: Every change is written to the audit log with the actor.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/FindingUpdate"}
+      responses:
+        "200":
+          description: The updated finding.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Finding"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+
+  /findings/{finding_id}/detail:
+    parameters:
+      - $ref: "#/components/parameters/FindingId"
+    get:
+      tags: [findings]
+      operationId: getFindingDetail
+      summary: A finding with its agents and audit timeline
+      x-concord-status: current
+      x-concord-role: viewer
+      responses:
+        "200":
+          description: Finding detail.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/FindingDetail"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+
+  /events/approvals/pending:
+    get:
+      tags: [approvals]
+      operationId: listPendingApprovals
+      summary: AI-path findings waiting for a human tiebreak
+      x-concord-status: current
+      x-concord-role: viewer
+      parameters:
+        - $ref: "#/components/parameters/Limit500"
+      responses:
+        "200":
+          description: Pending findings, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [pending, total]
+                properties:
+                  pending:
+                    type: array
+                    items: {$ref: "#/components/schemas/Finding"}
+                  total: {type: integer, minimum: 0}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+
+  /events/findings/{finding_id}/approve/{agent}:
+    parameters:
+      - $ref: "#/components/parameters/FindingId"
+      - $ref: "#/components/parameters/Agent"
+    post:
+      tags: [approvals]
+      operationId: approveFinding
+      summary: Resolve a tiebreak by choosing the winning agent
+      x-concord-status: changed
+      x-concord-issue: 69
+      x-concord-role: triager
+      description: |
+        Changed (step 18): the decision is one conditional UPDATE, so when two
+        requests race exactly one gets 200 and the other gets 409. Only the
+        winning request creates the GitHub issue. The response and the audit
+        record carry the approver's identity, taken from the credential, never
+        from the request body.
+      responses:
+        "200":
+          description: Approved by this request.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ApprovalResult"}
+        "400":
+          description: The agent was not a candidate for this finding.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/AlreadyDecided"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+
+  /events/findings/{finding_id}/reject:
+    parameters:
+      - $ref: "#/components/parameters/FindingId"
+    post:
+      tags: [approvals]
+      operationId: rejectFinding
+      summary: Reject a pending finding
+      x-concord-status: changed
+      x-concord-issue: 69
+      x-concord-role: triager
+      description: Same atomic rule and approver identity as approve.
+      parameters:
+        - name: reason
+          in: query
+          schema: {type: string, maxLength: 500, default: rejected by reviewer}
+      responses:
+        "200":
+          description: Rejected by this request.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/RejectionResult"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "404": {$ref: "#/components/responses/NotFound"}
+        "409": {$ref: "#/components/responses/AlreadyDecided"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+
+  /events/approvals/expire:
+    post:
+      tags: [approvals]
+      operationId: expireApprovals
+      summary: Expire pending approvals older than a cutoff
+      x-concord-status: current
+      x-concord-role: admin
+      parameters:
+        - name: max_age_hours
+          in: query
+          schema: {type: number, exclusiveMinimum: 0, default: 24}
+      responses:
+        "200":
+          description: Findings that were expired (each one audited).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, expired, count]
+                properties:
+                  status: {type: string, const: ok}
+                  expired:
+                    type: array
+                    items: {$ref: "#/components/schemas/FindingIdValue"}
+                  count: {type: integer, minimum: 0}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+
+  /events/github:
+    post:
+      tags: [scans]
+      operationId: githubWebhook
+      summary: GitHub push webhook
+      security: []
+      x-concord-status: changed
+      x-concord-issue: 63
+      description: |
+        Authenticated by the HMAC signature, not an API key. The server will
+        not start without `WEBHOOK_SECRET` (step 1, done).
+
+        Changed (step 12): a valid push queues a scan job and returns its id.
+        The worker clones the repository at exactly `head_commit.id` into a
+        temporary directory, scans it, and deletes it. Today the push is
+        analysed in-process against a server path instead.
+      parameters:
+        - name: X-Hub-Signature-256
+          in: header
+          required: true
+          description: '`sha256=` followed by the hex HMAC-SHA256 of the raw body.'
+          schema: {type: string, pattern: "^sha256=[0-9a-f]{64}$"}
+        - name: X-GitHub-Event
+          in: header
+          schema: {type: string, default: push}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/GitHubPush"}
+      responses:
+        "202":
+          description: Accepted (queued, ignored, or a ping).
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/WebhookAccepted"}
+        "400":
+          description: Body is not a JSON object, or head_commit.id is not a commit SHA.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "401":
+          description: Missing or wrong signature.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+
+  /events/scan-crms:
+    post:
+      tags: [scans]
+      operationId: triggerScan
+      summary: Scan the configured repository
+      x-concord-status: changed
+      x-concord-issue: 63
+      x-concord-role: triager
+      description: Changed (step 12) to queue a job like the webhook does; the response adds `job_id`.
+      responses:
+        "200":
+          description: The scan was started.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ScanState"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "409":
+          description: A scan is already running.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "500":
+          description: The scan configuration is invalid (for example CONCORD_SCAN_ID_PREFIX).
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+
+  /events/scan-status:
+    get:
+      tags: [scans]
+      operationId: scanStatus
+      summary: Current or last scan state
+      x-concord-status: current
+      x-concord-role: viewer
+      responses:
+        "200":
+          description: Scan state.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/ScanState"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+  /events/demo:
+    post:
+      tags: [scans]
+      operationId: runDemo
+      summary: Run a fixed sample finding through the pipeline (development aid)
+      x-concord-status: current
+      x-concord-role: triager
+      parameters:
+        - name: severity
+          in: query
+          schema:
+            allOf: [{$ref: "#/components/schemas/Severity"}]
+            default: CRITICAL
+      responses:
+        "200":
+          description: The pipeline result for the sample finding.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AnalysisResult"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+
+  /jobs/{job_id}:
+    parameters:
+      - name: job_id
+        in: path
+        required: true
+        schema: {type: string, format: uuid}
+    get:
+      tags: [scans]
+      operationId: getJob
+      summary: Status of a scan or ingest job
+      x-concord-status: planned
+      x-concord-issue: 62
+      x-concord-role: viewer
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Job"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "404": {$ref: "#/components/responses/NotFound"}
+
+  /ingest/sarif:
+    post:
+      tags: [ingest]
+      operationId: ingestSarif
+      summary: Push findings from any tool as SARIF 2.1.0
+      x-concord-status: planned
+      x-concord-issue: 66
+      x-concord-role: triager
+      parameters:
+        - name: repository
+          in: query
+          required: true
+          schema: {type: string, pattern: "^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$"}
+        - name: commit
+          in: query
+          required: true
+          schema: {type: string, pattern: "^[0-9a-fA-F]{7,64}$"}
+      requestBody:
+        required: true
+        content:
+          application/sarif+json:
+            schema: {$ref: "#/components/schemas/SarifLog"}
+          application/json:
+            schema: {$ref: "#/components/schemas/SarifLog"}
+      responses:
+        "202":
+          description: Queued for triage.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job_id]
+                properties:
+                  job_id: {type: string, format: uuid}
+        "400":
+          description: Not a valid SARIF 2.1.0 log.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+        "413":
+          description: The log is larger than the configured limit.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/Error"}
+
+  /audit/:
+    get:
+      tags: [audit]
+      operationId: listAudit
+      summary: The audit trail, newest first
+      x-concord-status: changed
+      x-concord-issue: 61
+      x-concord-role: viewer
+      description: Changed (steps 9 and 10) to add the actor and the hash chain to each entry.
+      parameters:
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 1000, default: 100}
+        - name: finding_id
+          in: query
+          schema: {$ref: "#/components/schemas/FindingIdValue"}
+      responses:
+        "200":
+          description: Audit entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [entries, total]
+                properties:
+                  entries:
+                    type: array
+                    items: {$ref: "#/components/schemas/AuditEntry"}
+                  total: {type: integer, minimum: 0}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "422": {$ref: "#/components/responses/ValidationError"}
+
+  /audit/verify:
+    get:
+      tags: [audit]
+      operationId: verifyAudit
+      summary: Recompute the audit hash chain
+      x-concord-status: planned
+      x-concord-issue: 61
+      x-concord-role: admin
+      responses:
+        "200":
+          description: The chain was checked; `valid` says whether it is intact.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AuditVerification"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+        "403": {$ref: "#/components/responses/Forbidden"}
+
+  /agents/:
+    get:
+      tags: [agents]
+      operationId: listAgents
+      summary: Domain agents and whether each one can run
+      x-concord-status: current
+      x-concord-role: viewer
+      responses:
+        "200":
+          description: Agents.
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/AgentList"}
+        "401": {$ref: "#/components/responses/Unauthorized"}
+
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Machine credential. Today one shared key from CONCORD_API_KEY; from
+        step 9 each key carries a role (viewer, triager or admin).
+    bearer:
+      type: http
+      scheme: bearer
+      description: |
+        The same API key as `Authorization: Bearer <key>`, or (step 9) an OIDC
+        access token for a human, whose role comes from the identity provider.
+
+  parameters:
+    FindingId:
+      name: finding_id
+      in: path
+      required: true
+      schema: {$ref: "#/components/schemas/FindingIdValue"}
+    Agent:
+      name: agent
+      in: path
+      required: true
+      schema: {$ref: "#/components/schemas/AgentName"}
+    Limit500:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 500, default: 50}
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid credential.
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    Forbidden:
+      description: The credential's role does not allow this (step 9).
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    NotFound:
+      description: No such resource.
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    AlreadyDecided:
+      description: The finding is not pending (already approved, rejected, expired or auto-resolved), or another request won the race.
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+    ValidationError:
+      description: A parameter failed validation.
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/Error"}
+
+  schemas:
+    Error:
+      type: object
+      required: [detail]
+      properties:
+        detail:
+          description: A message, or FastAPI's list of validation errors.
+          oneOf:
+            - type: string
+            - type: array
+              items: {type: object}
+
+    FindingIdValue:
+      type: string
+      minLength: 1
+      maxLength: 200
+      pattern: "^[A-Za-z0-9._:-]+$"
+      examples: [GH-0123456789ab, CRMS-3f2a9c1d7e4b]
+
+    AgentName:
+      type: string
+      maxLength: 40
+      pattern: "^[a-z_]+$"
+      examples: [infra, cicd, security, kubernetes, observability]
+
+    Severity:
+      type: string
+      enum: [CRITICAL, HIGH, MEDIUM, LOW, INFORMATIONAL]
+
+    DecisionPath:
+      type: string
+      enum: [fast_path, ai_path]
+
+    FindingState:
+      type: string
+      enum: [open, assigned, suppressed, false_positive, resolved]
+      description: Triage state of a finding (step 16).
+
+    Principal:
+      type: object
+      description: Who performed an action, taken from the credential (step 9).
+      required: [subject, kind]
+      properties:
+        subject: {type: string, description: OIDC subject or API key id.}
+        kind: {type: string, enum: [api_key, oidc, system]}
+        name: {type: [string, "null"], description: Display name or email, if known.}
+        role: {type: string, enum: [viewer, triager, admin]}
+
+    Health:
+      type: object
+      required: [status, service, version, auth_enforced]
+      properties:
+        status: {type: string, const: ok}
+        service: {type: string, const: concord}
+        version: {type: string}
+        auth_enforced: {type: boolean}
+
+    Readiness:
+      type: object
+      required: [ready, checks]
+      properties:
+        ready: {type: boolean}
+        checks:
+          type: object
+          additionalProperties: {type: string, description: '"ok" or an error message.'}
+
+    Finding:
+      type: object
+      required: [id, severity, artifact, repo, source, path, agent, result, timestamp]
+      properties:
+        id: {$ref: "#/components/schemas/FindingIdValue"}
+        severity: {$ref: "#/components/schemas/Severity"}
+        artifact: {type: string}
+        repo: {type: string}
+        source: {type: string}
+        path: {$ref: "#/components/schemas/DecisionPath"}
+        agent: {type: [string, "null"]}
+        result: {$ref: "#/components/schemas/AnalysisResult"}
+        timestamp: {type: string, format: date-time}
+        fingerprint:
+          type: string
+          description: Stable hash of rule, location and repository; the same violation keeps it across scans (step 16).
+        state: {$ref: "#/components/schemas/FindingState"}
+        assignee: {type: [string, "null"]}
+
+    FindingUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        state: {$ref: "#/components/schemas/FindingState"}
+        assignee: {type: [string, "null"]}
+        reason: {type: string, maxLength: 500}
+
+    AgentCandidate:
+      type: object
+      description: |
+        One agent's case in arbitration. From step 17 an agent with zero
+        violations is not a candidate, so it can never win.
+      required: [score, violations]
+      properties:
+        score: {type: number, minimum: 0, maximum: 1}
+        violations: {type: integer, minimum: 1}
+
+    AnalysisResult:
+      type: object
+      description: |
+        The decision for a finding. Fields beyond `path` depend on the path
+        and on what happened afterwards (approval, rejection, expiry).
+      required: [path]
+      properties:
+        path: {$ref: "#/components/schemas/DecisionPath"}
+        reason: {type: string}
+        agent: {type: [string, "null"], description: The winning agent, if any.}
+        score: {type: number}
+        auto_resolved: {type: boolean}
+        needs_approval: {type: boolean}
+        agents:
+          type: object
+          description: Candidate agents keyed by domain (today a plain score; step 17 adds evidence).
+          additionalProperties:
+            oneOf:
+              - type: number
+              - $ref: "#/components/schemas/AgentCandidate"
+        skipped_agents:
+          type: object
+          additionalProperties: {type: string}
+        pr_comment: {type: [string, "null"]}
+        approved_by:
+          type: string
+          description: The approved agent today; kept for the dashboard. The human is in `approver`.
+        approver: {$ref: "#/components/schemas/Principal"}
+        approved_at: {type: string, format: date-time}
+        rejected: {type: boolean}
+        reject_reason: {type: string}
+        expired: {type: boolean}
+        github_url: {type: [string, "null"], format: uri}
+        ai_suggestion:
+          type: boolean
+          description: True when root cause or fix text came from an LLM (step 21). The UI must label it.
+
+    FindingStats:
+      type: object
+      required: [total, fast, ai, tiebreaks]
+      properties:
+        total: {type: integer, minimum: 0}
+        fast: {type: integer, minimum: 0}
+        ai: {type: integer, minimum: 0}
+        tiebreaks: {type: integer, minimum: 0}
+
+    FindingList:
+      type: object
+      required: [findings, stats, llm_provider, filters]
+      properties:
+        findings:
+          type: array
+          items: {$ref: "#/components/schemas/Finding"}
+        stats: {$ref: "#/components/schemas/FindingStats"}
+        llm_provider: {type: string}
+        filters:
+          type: object
+          additionalProperties: {type: [string, "null"]}
+
+    FindingDetail:
+      type: object
+      required: [finding, agents, timeline]
+      properties:
+        finding: {$ref: "#/components/schemas/Finding"}
+        agents:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: number
+              - $ref: "#/components/schemas/AgentCandidate"
+        auto_resolved: {type: [boolean, "null"]}
+        approved_by: {type: [string, "null"]}
+        approver: {$ref: "#/components/schemas/Principal"}
+        rejected: {type: boolean}
+        expired: {type: boolean}
+        skipped_agents:
+          type: object
+          additionalProperties: {type: string}
+        timeline:
+          type: array
+          items: {$ref: "#/components/schemas/AuditEntry"}
+
+    Incident:
+      type: object
+      required: [artifact, count, max_severity, unresolved, last_seen]
+      properties:
+        artifact: {type: string}
+        count: {type: integer, minimum: 1}
+        max_severity: {$ref: "#/components/schemas/Severity"}
+        unresolved: {type: integer, minimum: 0}
+        last_seen: {type: string, format: date-time}
+
+    ApprovalResult:
+      type: object
+      required: [status, finding_id, agent, persisted]
+      properties:
+        status: {type: string, const: approved}
+        finding_id: {$ref: "#/components/schemas/FindingIdValue"}
+        agent: {$ref: "#/components/schemas/AgentName"}
+        approver: {$ref: "#/components/schemas/Principal"}
+        persisted: {type: boolean}
+        github_url: {type: [string, "null"], format: uri}
+        github_error: {type: [string, "null"]}
+        message: {type: string}
+
+    RejectionResult:
+      type: object
+      required: [status, finding_id, persisted, reason]
+      properties:
+        status: {type: string, const: rejected}
+        finding_id: {$ref: "#/components/schemas/FindingIdValue"}
+        approver: {$ref: "#/components/schemas/Principal"}
+        persisted: {type: boolean}
+        reason: {type: string}
+
+    AuditEntry:
+      type: object
+      required: [finding_id, path, reason, agent, correlation_id, timestamp]
+      properties:
+        finding_id: {type: string}
+        path: {type: string}
+        reason: {type: string}
+        agent: {type: [string, "null"]}
+        correlation_id: {type: string}
+        timestamp: {type: string, format: date-time}
+        actor: {$ref: "#/components/schemas/Principal"}
+        prev_hash: {type: string, description: Hash of the previous entry (step 10).}
+        hash: {type: string, description: SHA-256 over this entry and prev_hash (step 10).}
+
+    AuditVerification:
+      type: object
+      required: [valid, checked]
+      properties:
+        valid: {type: boolean}
+        checked: {type: integer, minimum: 0}
+        first_bad_entry:
+          type: [integer, "null"]
+          description: Position of the first entry whose hash does not match.
+
+    AgentInfo:
+      type: object
+      required: [domain, reliability, backing, kind, status, detail]
+      properties:
+        domain: {type: string}
+        reliability: {type: number}
+        backing: {type: string}
+        kind: {type: string}
+        status: {type: string}
+        detail: {type: string}
+        endpoint: {type: [string, "null"]}
+        checked_at: {type: [number, "null"]}
+
+    AgentList:
+      type: object
+      required: [agents, active, blocked]
+      properties:
+        agents:
+          type: array
+          items: {$ref: "#/components/schemas/AgentInfo"}
+        active: {type: integer, minimum: 0}
+        blocked: {type: integer, minimum: 0}
+
+    ScanState:
+      type: object
+      properties:
+        status: {type: string, enum: [idle, scanning, done, error]}
+        target: {type: string}
+        job_id: {type: [string, "null"], format: uuid, description: Step 12.}
+        message: {type: [string, "null"]}
+        started: {type: [string, "null"]}
+        finished: {type: [string, "null"]}
+        error: {type: [string, "null"]}
+        finding_id: {type: [string, "null"]}
+        commit: {type: [string, "null"]}
+        total: {type: [integer, "null"]}
+        severity: {type: [string, "null"]}
+        by_scanner:
+          type: [object, "null"]
+          additionalProperties: {type: integer}
+        path: {type: [string, "null"]}
+        auto_resolved: {type: [boolean, "null"]}
+        needs_approval: {type: [boolean, "null"]}
+        unchanged: {type: [boolean, "null"]}
+        skipped_agents:
+          type: [object, "null"]
+          additionalProperties: {type: string}
+        warnings:
+          type: array
+          items: {type: string}
+
+    Job:
+      type: object
+      required: [id, kind, state, created_at]
+      properties:
+        id: {type: string, format: uuid}
+        kind: {type: string, enum: [scan, sarif_ingest]}
+        state: {type: string, enum: [queued, running, done, failed, dead]}
+        repository: {type: string}
+        commit: {type: string}
+        attempts: {type: integer, minimum: 0}
+        error: {type: [string, "null"]}
+        finding_ids:
+          type: array
+          items: {$ref: "#/components/schemas/FindingIdValue"}
+        created_at: {type: string, format: date-time}
+        finished_at: {type: [string, "null"], format: date-time}
+
+    GitHubPush:
+      type: object
+      description: The parts of GitHub's push payload Concord reads; other fields are ignored.
+      properties:
+        repository:
+          type: object
+          properties:
+            full_name: {type: string}
+            clone_url: {type: string, format: uri}
+        head_commit:
+          type: [object, "null"]
+          properties:
+            id: {type: string, pattern: "^[0-9a-fA-F]{7,64}$"}
+            message: {type: string}
+            added: {type: array, items: {type: string}}
+            modified: {type: array, items: {type: string}}
+
+    WebhookAccepted:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [received, queued, ignored, pong]
+          description: '"received" today; "queued" from step 12.'
+        job_id: {type: string, format: uuid}
+        finding_id: {$ref: "#/components/schemas/FindingIdValue"}
+        repo: {type: string}
+        commit: {type: string}
+        reason: {type: string}
+
+    SarifLog:
+      type: object
+      description: A SARIF 2.1.0 log (validated fully by the server).
+      required: [version, runs]
+      properties:
+        version: {type: string, const: "2.1.0"}
+        $schema: {type: string}
+        runs:
+          type: array
+          minItems: 1
+          items: {type: object}

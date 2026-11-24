@@ -217,6 +217,8 @@ disabled automatically when output is piped.
 
 ## API
 
+The full contract is [`openapi.yaml`](openapi.yaml): every route the dashboard and CLI use, plus the fixed design the Go rewrite implements (each operation is marked `current`, `changed` or `planned`). A test fails if the spec and the server drift apart.
+
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/health` | Liveness + auth posture |
