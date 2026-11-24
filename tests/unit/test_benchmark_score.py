@@ -116,3 +116,24 @@ def test_repos_are_pinned_to_full_commits():
             assert re.fullmatch(r"[0-9a-f]{40}", x["commit"]), x["name"]
         else:
             assert (ROOT.parent / x["path"]).is_dir(), x["name"]
+
+
+def test_hygiene_checks_are_neutral_even_on_clean_repos():
+    rulemap = {"checkov": {**RULEMAP["checkov"], "CKV_AWS_18": "hygiene"}}
+    s = score(CLEAN, {"repo": "clean-demo", "scope": [], "findings": [], "rejected": []},
+              [r("CKV_AWS_18", "main.tf", 4)], rulemap)
+    assert s.summary()["counts"] == {"hygiene": 1} and s.fp == 0
+    s = score(VULN, LABELS, [r("CKV_AWS_18", "infra/s3.tf", 12)], rulemap)
+    assert s.summary()["counts"] == {"hygiene": 1} and s.tp == 0
+
+
+def test_clean_fixture_scores_clean_with_real_tool_output():
+    """Checkov and Trivy SARIF captured from benchmark/fixtures/clean-terraform."""
+    from benchmark.score import load_repo, load_rulemap
+    results = [r(rule, "main.tf", 1) for rule in
+               ["CKV2_AWS_5", "CKV2_AWS_62", "CKV_AWS_144", "CKV_AWS_18", "CKV2_AWS_61"]]
+    results += [r(rule, "main.tf", 1, tool="trivy") for rule in ["AWS-0089", "AWS-0132"]]
+    s = score(load_repo("clean-terraform"),
+              {"repo": "clean-terraform", "scope": [], "findings": [], "rejected": []},
+              results, load_rulemap())
+    assert s.fp == 0 and s.summary()["counts"] == {"hygiene": 7}

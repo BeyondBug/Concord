@@ -4,8 +4,19 @@
 #   <tool name as in SARIF runs[].tool.driver.name, any case>:
 #     <ruleId>: <class>
 #
+# The class "hygiene" marks best-practice checks (logging, replication,
+# lifecycle, customer-managed keys) that are not security exposures: they get
+# their own bucket and never count as true or false positives.
+#
 # A rule missing here is reported in the "unmapped" bucket, never silently
 # counted. Filled in as each repository is labeled.
-checkov: {}
-trivy: {}
+checkov:
+  CKV2_AWS_5: hygiene     # security group not attached to a resource
+  CKV2_AWS_61: hygiene    # S3 bucket has no lifecycle configuration
+  CKV2_AWS_62: hygiene    # S3 bucket has no event notifications
+  CKV_AWS_18: hygiene     # S3 bucket access logging disabled
+  CKV_AWS_144: hygiene    # S3 bucket has no cross-region replication
+trivy:
+  AWS-0089: hygiene       # S3 bucket logging disabled
+  AWS-0132: hygiene       # S3 encryption uses an AWS-managed key, not a customer-managed key
 semgrep: {}

@@ -41,7 +41,8 @@ A result is a true positive when its file matches a label, its line is inside
 the label's range (two lines of slack either side), and its rule maps to the
 label's class. Every result lands in exactly one bucket: `tp`, `duplicate`,
 `fp`, `unreviewed` (in scope but not judged yet), `unmapped` (rule missing
-from `rulemap.yaml`) or `out_of_scope`. Precision is `tp / (tp + fp)` and
+from `rulemap.yaml`), `hygiene` (a best-practice check such as access logging,
+mapped to the class `hygiene`; neither rewarded nor punished) or `out_of_scope`. Precision is `tp / (tp + fp)` and
 recall is `tp / (tp + missed labels)`. Unreviewed and unmapped results are
 reported, never silently counted as right or wrong; `--fail-on-unreviewed`
 turns them into a CI failure.

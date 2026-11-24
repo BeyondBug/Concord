@@ -13,6 +13,9 @@ Every result lands in exactly one bucket:
   fp            matches a reviewed false alarm, or any alert in a clean repo
   unreviewed    in scope, mapped, but no human has judged it yet
   unmapped      the rule has no class in rulemap.yaml (a mapping gap, shown so it gets fixed)
+  hygiene       the rule is mapped to the class "hygiene": a best-practice check (logging,
+                replication, lifecycle) rather than a security exposure, so it is neither
+                rewarded nor punished
   out_of_scope  outside the reviewed paths
 """
 from __future__ import annotations
@@ -29,6 +32,7 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 LINE_SLACK = 2
+HYGIENE = "hygiene"
 
 
 @dataclass(frozen=True)
@@ -141,6 +145,9 @@ def score(repo: dict, expected: dict, results: list[Result], rulemap: dict) -> S
 
     for r in sorted(results, key=lambda x: (x.file, x.line, x.tool, x.rule)):
         cls = rulemap.get(r.tool, {}).get(r.rule)
+        if cls == HYGIENE:
+            put("hygiene", r)
+            continue
         if repo["kind"] == "clean":
             put("fp", r, cls)  # any alert on a clean repo is noise
             continue
