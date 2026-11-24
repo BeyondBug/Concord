@@ -87,9 +87,30 @@ def get_dedup_store(ttl_seconds: int = DEFAULT_TTL_SECONDS):
         client = redis.Redis.from_url(url, socket_connect_timeout=1,
                                       socket_timeout=1, decode_responses=True)
         client.ping()
-        logger.info("Dedup using Redis at %s", url)
+        logger.info("Dedup using Redis")
         return RedisDedupStore(client, ttl_seconds)
     except Exception as exc:  # noqa: BLE001 - any Redis failure → safe fallback
         logger.warning("Redis unavailable (%s); dedup falling back to in-memory.",
                        exc)
         return InMemoryDedupStore(ttl_seconds)
+
+# ── Process-wide default ──────────────────────────────────────────────
+# The API builds a new Orchestrator (and so a new DedupRule) per request. With
+# a per-rule in-memory store, dedup could never fire across requests, so the
+# default store is shared by every rule in the process.
+
+_shared_store = None
+
+
+def get_shared_dedup_store():
+    """Return the process-wide dedup store, creating it on first use."""
+    global _shared_store
+    if _shared_store is None:
+        _shared_store = get_dedup_store()
+    return _shared_store
+
+
+def reset_shared_dedup_store() -> None:
+    """Forget the shared store (tests use this for isolation)."""
+    global _shared_store
+    _shared_store = None

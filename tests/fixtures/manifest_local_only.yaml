@@ -1,0 +1,10 @@
+# Test manifest: no external agent backends, so the suite never depends on
+# (or accidentally calls) a live kagent / HolmesGPT on the developer machine.
+version: "1.0"
+connectors:
+  - name: terrasecure
+    type: mcp
+    url: http://localhost:8001
+    token_env: TERRASECURE_TOKEN
+    agent: infra
+    capabilities: [scan_terraform]
