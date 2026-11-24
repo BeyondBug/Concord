@@ -3,6 +3,7 @@
 pytest>=9.2.0
 pytest-asyncio>=1.5.0
 pytest-cov>=7.1.0
+openapi-spec-validator>=0.7
 ruff>=0.17.6
 mypy>=2.4.1
 mcp>=2.3,<3  # tests/integration/mcp_servers.py needs mcp.server.mcpserver
