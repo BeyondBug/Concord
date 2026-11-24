@@ -1,3 +1,4 @@
+# checkov:skip=CKV_OPENAPI_5: /, /health, /version and /ready are public by design; /events/github is authenticated by its HMAC signature.
 openapi: 3.1.0
 info:
   title: Concord API
@@ -7,7 +8,8 @@ info:
     The contract for Concord's HTTP API. It describes the routes the Python
     server serves today and the corrected design the Go rewrite must meet.
 
-    Every operation carries two extensions:
+    Every operation carries `x-concord-status`; `changed` and `planned`
+    operations also carry `x-concord-issue`:
 
     - `x-concord-status`: `current` (served today, as described), `changed`
       (served today, but this spec describes the fixed behaviour that the Go
@@ -16,6 +18,12 @@ info:
 
     Paths stay as they are today so the existing dashboard and CLI keep working
     against the Go server. Errors use FastAPI's shape: `{"detail": ...}`.
+
+    Authentication: the Go server always requires a credential on every
+    operation that declares one. The Python server has one exception: when
+    `CONCORD_API_KEY` is unset it runs in open development mode, accepts
+    requests without a credential, and reports `auth_enforced: false` on
+    `/health`. Contract tests run with a key set.
   license:
     name: Apache-2.0
     identifier: Apache-2.0
@@ -167,7 +175,9 @@ paths:
       x-concord-status: current
       x-concord-role: viewer
       parameters:
-        - $ref: "#/components/parameters/Limit500"
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 200, default: 50}
       responses:
         "200":
           description: One incident per artifact.
@@ -253,7 +263,9 @@ paths:
       x-concord-status: current
       x-concord-role: viewer
       parameters:
-        - $ref: "#/components/parameters/Limit500"
+        - name: limit
+          in: query
+          schema: {type: integer, minimum: 1, maximum: 500, default: 100}
       responses:
         "200":
           description: Pending findings, newest first.
@@ -336,15 +348,23 @@ paths:
       tags: [approvals]
       operationId: expireApprovals
       summary: Expire pending approvals older than a cutoff
-      x-concord-status: current
+      x-concord-status: changed
+      x-concord-issue: 69
       x-concord-role: admin
+      description: |
+        Changed (step 18): each expiry uses the same conditional "still
+        pending" write as approve and reject, and the `expired` flag and its
+        audit entry are recorded only when that write succeeds. Approve,
+        reject and expire can never all finalize the same finding; exactly one
+        wins. Today the handler writes from a previously loaded copy, so an
+        approval running at the same moment can also be recorded.
       parameters:
         - name: max_age_hours
           in: query
           schema: {type: number, exclusiveMinimum: 0, default: 24}
       responses:
         "200":
-          description: Findings that were expired (each one audited).
+          description: Findings this request expired (each one audited).
           content:
             application/json:
               schema:
@@ -415,13 +435,13 @@ paths:
       x-concord-status: changed
       x-concord-issue: 63
       x-concord-role: triager
-      description: Changed (step 12) to queue a job like the webhook does; the response adds `job_id`.
+      description: Changed (step 12) to queue a job like the webhook does; the response always carries the `job_id` to follow on `/jobs/{job_id}`.
       responses:
         "200":
-          description: The scan was started.
+          description: The scan was queued.
           content:
             application/json:
-              schema: {$ref: "#/components/schemas/ScanState"}
+              schema: {$ref: "#/components/schemas/ScanStarted"}
         "401": {$ref: "#/components/responses/Unauthorized"}
         "403": {$ref: "#/components/responses/Forbidden"}
         "409":
@@ -751,7 +771,10 @@ components:
 
     FindingUpdate:
       type: object
-      minProperties: 1
+      description: 'Must change `state` or `assignee`; `"assignee": null` clears the assignment.'
+      anyOf:
+        - required: [state]
+        - required: [assignee]
       properties:
         state: {$ref: "#/components/schemas/FindingState"}
         assignee: {type: [string, "null"]}
@@ -767,12 +790,34 @@ components:
         score: {type: number, minimum: 0, maximum: 1}
         violations: {type: integer, minimum: 1}
 
+    AgentAnalysis:
+      type: object
+      description: One agent's analysis as stored with the decision.
+      required: [score, root_cause, suggested_fix]
+      properties:
+        score: {type: number, minimum: 0, maximum: 1}
+        root_cause: {type: string}
+        suggested_fix: {type: string}
+        scanner: {type: string}
+        backend: {type: string}
+        violations: {type: integer, minimum: 0}
+        by_severity:
+          type: object
+          additionalProperties: {type: integer, minimum: 0}
+        target: {type: string}
+
     AnalysisResult:
       type: object
       description: |
         The decision for a finding. Fields beyond `path` depend on the path
         and on what happened afterwards (approval, rejection, expiry).
+        `analyses` is required on the AI path, where agents ran.
       required: [path]
+      if:
+        properties: {path: {const: ai_path}}
+        required: [agents]
+      then:
+        required: [path, analyses]
       properties:
         path: {$ref: "#/components/schemas/DecisionPath"}
         reason: {type: string}
@@ -782,11 +827,16 @@ components:
         needs_approval: {type: boolean}
         agents:
           type: object
-          description: Candidate agents keyed by domain (today a plain score; step 17 adds evidence).
-          additionalProperties:
-            oneOf:
-              - type: number
-              - $ref: "#/components/schemas/AgentCandidate"
+          description: Candidate agents keyed by domain, mapped to their score. Clients format these as numbers, so they stay numbers.
+          additionalProperties: {type: number, minimum: 0, maximum: 1}
+        candidates:
+          type: object
+          description: Evidence behind each candidate (step 17), keyed like `agents`.
+          additionalProperties: {$ref: "#/components/schemas/AgentCandidate"}
+        analyses:
+          type: object
+          description: Each agent's root cause and fix, keyed by domain. Present whenever agents ran (the dashboard detail view and `concord finding` render it).
+          additionalProperties: {$ref: "#/components/schemas/AgentAnalysis"}
         skipped_agents:
           type: object
           additionalProperties: {type: string}
@@ -833,10 +883,7 @@ components:
         finding: {$ref: "#/components/schemas/Finding"}
         agents:
           type: object
-          additionalProperties:
-            oneOf:
-              - type: number
-              - $ref: "#/components/schemas/AgentCandidate"
+          additionalProperties: {type: number, minimum: 0, maximum: 1}
         auto_resolved: {type: [boolean, "null"]}
         approved_by: {type: [string, "null"]}
         approver: {$ref: "#/components/schemas/Principal"}
@@ -956,6 +1003,16 @@ components:
         warnings:
           type: array
           items: {type: string}
+
+    ScanStarted:
+      description: The trigger response. Unlike ScanState, `job_id` is always present.
+      allOf:
+        - $ref: "#/components/schemas/ScanState"
+        - type: object
+          required: [status, job_id]
+          properties:
+            status: {const: scanning}
+            job_id: {type: string, format: uuid}
 
     Job:
       type: object
