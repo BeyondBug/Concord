@@ -18,6 +18,7 @@ import asyncio
 import hashlib
 import logging
 import os
+import re
 import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -28,14 +29,14 @@ from fastapi import Path as PathParam
 from pydantic import BaseModel
 
 from core.models.agent_response import SOURCE_RELIABILITY
+from core.models.finding import ID_MAX_LEN, ID_PATTERN
 from core.persistence import AuditRecord, get_store
 from core.persistence.store import _is_pending
 
 router = APIRouter(prefix="/events", tags=["scan"])
 logger = logging.getLogger("concord.scan")
 
-# IDs and agent names are logged and audited: allow only safe characters.
-_ID = PathParam(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._:-]+$")
+_ID = PathParam(min_length=1, max_length=ID_MAX_LEN, pattern=ID_PATTERN)
 _SEV_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
 
 
@@ -82,6 +83,14 @@ async def scan_crms_endpoint(background_tasks: BackgroundTasks) -> ScanState:
         if _scan_state.status == "scanning":
             raise HTTPException(status_code=409, detail="A scan is already running.")
         target = scan_target()
+        # Scan IDs are "<prefix>-<12-char sha>"; refuse a prefix that would
+        # create findings the API can never address.
+        if (not re.fullmatch(ID_PATTERN, target["prefix"])
+                or len(target["prefix"]) > ID_MAX_LEN - 13):
+            raise HTTPException(
+                status_code=500,
+                detail="CONCORD_SCAN_ID_PREFIX must match "
+                       f"{ID_PATTERN} and be at most {ID_MAX_LEN - 13} characters.")
         _scan_state = ScanState(status="scanning", target=target["name"],
                                 started=_now(), message="Starting scan…")
     background_tasks.add_task(_run_scan)
