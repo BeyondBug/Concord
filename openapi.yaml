@@ -815,12 +815,21 @@ components:
         set and `auto_resolved` is null), or agents ran and were arbitrated,
         in which case `agent`, `agents` and `analyses` are all required.
       required: [path]
-      if:
-        required: [path]
-        properties: {path: {const: ai_path}}
-        not: {required: [error]}
-      then:
-        required: [path, agent, agents, analyses]
+      allOf:
+        # Agents ran and were arbitrated: the full record is required.
+        - if:
+            required: [path]
+            properties: {path: {const: ai_path}}
+            not: {required: [error]}
+          then:
+            required: [agent, agents, analyses]
+        # Naming a winner means agents ran, so the two shapes cannot mix.
+        - if:
+            required: [agent]
+            properties: {agent: {type: string}}
+          then:
+            required: [agents, analyses]
+            not: {required: [error]}
       properties:
         path: {$ref: "#/components/schemas/DecisionPath"}
         reason: {type: string}
