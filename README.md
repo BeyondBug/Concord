@@ -67,9 +67,9 @@ flowchart TD
     AGENTS --> INFRA[Infra]
     AGENTS --> CICD[CI/CD]
     AGENTS --> SEC[Security]
-    AGENTS -. planned .-> K8S[Kubernetes ·MCP]
-    AGENTS -. planned .-> OBS[Observability ·MCP]
-    INFRA & CICD & SEC --> ARB[Arbitration]
+    AGENTS -. when reachable .-> K8S[Kubernetes · kagent MCP]
+    AGENTS -. when reachable .-> OBS[Observability · HolmesGPT]
+    INFRA & CICD & SEC & K8S & OBS --> ARB[Arbitration]
     ARB -->|clear winner| RESOLVE[Auto-resolve]
     ARB -->|close call| APPROVE[Human approval gate]
     FAST & RESOLVE & APPROVE --> STORE[(Persistence·SQLite/Postgres)]
@@ -104,10 +104,15 @@ flowchart TD
 ## Features
 
 - **Triage + arbitration** with a deterministic confidence model.
-- **Domain agents**: Infra (Terraform/pattern scan), CI/CD (K8s/Dockerfile),
-  Security (source-code pattern scan). Kubernetes and Observability agents are
-  **scaffolded and planned** — they require live MCP services (kagent /
-  HolmesGPT) and are not yet wired end-to-end.
+- **Domain agents**: Infra (Terraform), CI/CD (Kubernetes manifests) and
+  Security (source code) run Concord's built-in pattern scanners. Kubernetes
+  (kagent over MCP) and Observability (HolmesGPT REST) clients are implemented
+  and run whenever their backend answers a live probe; otherwise they are
+  reported **blocked** with the reason and skipped. They have **not yet been
+  verified against live kagent / HolmesGPT** — see `docs/AGENTS_SETUP.md`.
+- **Repository scan**: clones/updates the target repo (default
+  `crms-devops/crms`), runs every available agent, one finding per commit —
+  re-scanning an unchanged commit adds an audit entry, not a duplicate.
 - **Persistence**: durable SQLite by default; **PostgreSQL** backend selected
   automatically when `CONCORD_DATABASE_URL` is set, with graceful fallback.
 - **Auditable approvals**: approve, reject, and expire flows — all durable and
@@ -116,8 +121,10 @@ flowchart TD
   prompt-injection sanitization on untrusted tool output, dedup.
 - **Observability**: structured (JSON) logging and request **correlation IDs**
   threaded from the API into logs and audit records.
-- **Interfaces**: a web dashboard (Overview / Findings / Approvals / Audit) and
-  a CLI with human and `--json` machine-readable output.
+- **Interfaces**: a web dashboard (Overview, Findings with per-agent detail and
+  audit timeline, Approvals, Incidents, Security, Audit, Settings — all live API
+  data, keyboard shortcuts `1`–`7`, `j`/`k`, `/`, `r`) and a CLI with human and
+  `--json` output.
 
 ---
 
@@ -130,7 +137,7 @@ python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\Activ
 pip install -r requirements/dev.txt
 cp .env.example .env                               # then edit as needed
 
-uvicorn api.main:app --reload --port 8000
+uvicorn api.main:app --reload --port 8000 --env-file .env   # the app itself does not read .env
 # open http://localhost:8000  (dashboard)
 ```
 
@@ -184,8 +191,15 @@ concord approvals              # pending human decisions
 concord approve <id> <agent>   # resolve a tie-break
 concord reject <id>            # reject a pending finding
 concord invoke -s CRITICAL     # run the pipeline on a demo finding
-concord agents                 # domain agents + status
+concord agents                 # domain agents: active, or blocked + reason
+concord scan [--no-wait]       # scan the configured repository
+concord scan-status            # current / last scan
+concord finding <id>           # per-agent analysis + audit timeline
+concord stats | diagnostics
 ```
+
+Exit codes: `0` ok · `1` the API refused the request (reason printed) · `2`
+API unreachable.
 
 `--json` (or `CONCORD_OUTPUT=json`) emits pure JSON for scripting; colour is
 disabled automatically when output is piped.
@@ -199,17 +213,24 @@ disabled automatically when output is piped.
 | GET | `/health` | Liveness + auth posture |
 | GET | `/findings/` | Findings + stats |
 | GET | `/findings/{id}` | One finding |
+| GET | `/findings/{id}/detail` | Finding + per-agent analyses + audit timeline |
+| GET | `/findings/severity` | Counts by severity |
+| GET | `/findings/incidents` | Findings grouped by artifact |
+| GET | `/agents/` | Agents with live status (active / blocked + reason) |
+| GET | `/events/scan-status` | Current / last scan |
 | GET | `/audit/` | Audit trail |
 | GET | `/events/approvals/pending` | Pending approvals |
 | POST | `/events/findings/{id}/approve/{agent}` | Approve a tie-break |
 | POST | `/events/findings/{id}/reject` | Reject a finding |
 | POST | `/events/approvals/expire` | Expire stale approvals |
-| POST | `/events/demo` | Run the pipeline on a demo finding |
+| POST | `/events/demo` | Run the pipeline on a demo finding (key-protected) |
 | POST | `/events/scan-crms` | Trigger a repository scan |
 | POST | `/events/github` | GitHub webhook (HMAC-verified) |
 
-Data/state routes require the API key when `CONCORD_API_KEY` is set. `/health`,
-`/`, and the HMAC-verified webhook are public by design.
+Data/state routes require the API key when `CONCORD_API_KEY` is set (the
+dashboard asks for it and keeps it in `sessionStorage`). `/health`, `/version`,
+`/`, and the HMAC-verified webhook are public by design. Approving or rejecting
+anything that is not a pending tiebreak returns `409`.
 
 ---
 
@@ -233,12 +254,14 @@ not mounted. Provide secrets via a Kubernetes Secret referenced by
 ```bash
 ruff check .
 pytest tests/ -q -m "not slow"     # fast suite
-pytest -m slow                     # slow/real-timeout tests
+pytest -m slow                     # real timeouts + live kagent/HolmesGPT (skip if absent)
 ```
 
-The suite covers triage, arbitration, agents, persistence (SQLite + Postgres
-logic + migration), auth, transport security, sanitization, dedup, the approval
-lifecycle, observability/correlation, and the CLI.
+The fast suite covers triage, arbitration, the scan route against a real local
+git repo, every agent (including the kagent/HolmesGPT clients against a real
+MCP SDK server), persistence, auth, transport security, sanitization, dedup,
+the approval state machine, the CLI, and the Friday end-to-end flow
+(`tests/integration/test_e2e.py`).
 
 ---
 
@@ -246,7 +269,7 @@ lifecycle, observability/correlation, and the CLI.
 
 ```
 api/            FastAPI app, routes, middleware, dashboard
-agents/         domain agents (infra, cicd, security, k8s*, observability*)
+agents/         domain agents (infra, cicd, security, kubernetes*, observability*)
 core/
   orchestrator/   triage → agents → arbitration → LLM → store
   arbitration/    deterministic confidence + resolver
@@ -261,17 +284,19 @@ helm/ infra/    deployment assets
 tests/          unit + integration
 docs/           architecture, completion tracker
 ```
-`*` scaffolded / planned (requires live MCP services).
+`*` external backends (kagent / HolmesGPT); blocked until reachable.
 
 ---
 
 ## Status
 
-Concord is under active development. The triage/arbitration core, persistence,
-approvals, security controls, observability, CLI, and dashboard read views are
-implemented and tested. The Kubernetes and Observability agents are scaffolded
-but require live MCP endpoints to complete. See `docs/PROJECT_COMPLETION.md` for
-a slice-by-slice status.
+Concord is under active development. The triage/arbitration core, repository
+scan, persistence, approvals, security controls, observability, CLI and
+dashboard are implemented, tested and verified against a live API. The
+Kubernetes and Observability agent clients are implemented and gated but have
+not been run against live kagent / HolmesGPT yet (blocked on a local cluster —
+`docs/AGENTS_SETUP.md`). Per-area status: `docs/PROJECT_COMPLETION.md`; audit
+with evidence: `docs/AUDIT.md`.
 
 ## Contributing
 

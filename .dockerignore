@@ -22,3 +22,7 @@ docs
 .github
 htmlcov
 .coverage
+# Scanned target repositories and local tooling
+repos
+.claude
+.semgrep

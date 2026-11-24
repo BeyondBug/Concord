@@ -42,7 +42,7 @@ class CICDAgent(BaseAgent):
         target = self._resolve(finding.artifact)
         logger.info("[CICD]  scanning %s", target)
 
-        loop    = asyncio.get_event_loop()
+        loop    = asyncio.get_running_loop()
         scanner = KubernetesScanner()
         raw     = await loop.run_in_executor(None, scanner.scan, target)
         result  = scan_to_dict(raw, target)
@@ -59,6 +59,7 @@ class CICDAgent(BaseAgent):
                 "target":     target,
                 "violations": result["total"],
                 "by_severity": result.get("by_severity", {}),
+                "checks": result["checks"],
                 "real_scan":  True,
             },
         )

@@ -108,3 +108,14 @@ async def test_orchestrator_audits_every_finding(orchestrator_with_mem_store):
 
     audited_ids = {a["finding_id"] for a in orchestrator_with_mem_store.list_audit()}
     assert {"L1", "L2"} <= audited_ids
+
+def test_severity_breakdown(mem_store):
+    # Distinct ids (id(object()) is reused for short-lived objects).
+    for n, sev in enumerate(["HIGH", "HIGH", "LOW", "CRITICAL"]):
+        mem_store.add_finding(FindingRecord(
+            id=f"S-{sev}-{n}", severity=sev, artifact="x",
+            repo="", source="", path="fast_path", agent=None, result={}))
+    bd = mem_store.severity_breakdown()
+    assert bd.get("HIGH") == 2
+    assert bd.get("LOW") == 1
+    assert bd.get("CRITICAL") == 1

@@ -47,3 +47,5 @@ concord.db-wal
 concord.db-shm
 *.sqlite
 *.sqlite3
+# Scanned target repositories (cloned by the scan route) — never committed
+repos/

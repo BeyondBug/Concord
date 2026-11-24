@@ -1,5 +1,68 @@
 # Concord — Project Completion Tracker
 
+Honest status as of **2026-09-25** (branch `feat/premium-ui-completion`).
+DONE = implemented and verified by tests **and** a live run; PARTIAL = works
+with a stated gap; BLOCKED = needs something outside this machine's current
+state. Evidence and bug list: `docs/AUDIT.md`.
+
+## Verification (final run)
+
+| Check | Result |
+|---|---|
+| `ruff check .` | All checks passed |
+| `CONCORD_DB_PATH=:memory: pytest tests/ -q -m "not slow"` | **194 passed**, 3 deselected (baseline: 142) |
+| `pytest -m slow` | 1 passed (Postgres fallback), 2 skipped (live kagent / HolmesGPT not running) |
+| `pytest tests/integration/test_e2e.py` (Friday gate) | 1 passed — real flow, no longer a placeholder |
+| `python -m compileall api core agents concord_cli` | ok |
+| `helm lint helm/concord` / `helm template` | 0 failed; Deployment, Service, ServiceAccount |
+| `docker build .` | **not run** — Docker daemon not running on this machine |
+| Live API (uvicorn) + curl of every dashboard endpoint | all 200 (`/health`, `/version`, `/findings/`, `/findings/severity`, `/findings/incidents`, `/findings/{id}/detail`, `/events/approvals/pending`, `/audit/`, `/agents/`, `/events/scan-status`, `/`) |
+| Live CLI smoke | `health agents scan findings finding approvals approve reject audit stats diagnostics invoke` — expected output and exit codes (409/404/422 → exit 1 with reason) |
+| Live dashboard | all 7 views render live data, no NaN times, no error toasts; scan → detail → approve verified in the browser |
+| Real scan of `crms-devops/crms` | commit `9ce9781fda5d`, 10 violations (terraform 2, kubernetes 8), tiebreak raised; re-scan deduplicated |
+
+## Status by area
+
+| Area | Status | Notes |
+|---|---|---|
+| Triage (severity, known-pattern, dedup) | DONE | dedup now shared per process (was a no-op in the API) |
+| Deterministic confidence + arbitration | DONE | unchanged formula; see open decision below |
+| Orchestrator | DONE | 5 agents concurrently, blocked/failing agents skipped with reason, candidates + analyses stored |
+| Built-in scanners (Terraform, K8s, source) | DONE | regex scanners, not TerraSecure/Trivy/Checkov |
+| Infra / CI-CD / Security agents | DONE | run the built-in scanners |
+| Kubernetes agent (kagent MCP) | PARTIAL | live: cluster + kagent 0.10.2 installed, agent active, executes k8s tools for Concord; full answer exceeds 300 s on a 4 GB laptop GPU (`docs/AGENTS_SETUP.md`) |
+| Observability agent (HolmesGPT) | PARTIAL | live: installed, `/readyz` 200, receives Concord's questions; answers exceed 300 s on the same hardware |
+| Repository scan | DONE | one finding per commit, audited, errors surfaced |
+| Persistence (SQLite / Postgres) | DONE / PARTIAL | Postgres code path unit-tested; not run against a live Postgres here |
+| Audit trail (correlation ids) | DONE | every decision incl. fast path, re-scans, approvals |
+| Approval workflow | DONE | pending-only state machine, 409 otherwise, GitHub issue optional |
+| API validation, schemas, errors | DONE | query bounds, response models, JSON 500 with request id |
+| Auth (API key) | DONE | demo endpoint now protected |
+| MCP transport security | DONE | https by default; http needs explicit opt-in |
+| CLI | DONE | verified live |
+| Dashboard | DONE | verified live |
+| Docker image | PARTIAL | `git` added, context trimmed; build not run (daemon down) |
+| Helm chart | PARTIAL | lint/template pass; not deployed |
+| TerraSecure / Trivy / Checkov MCP connectors | NOT STARTED | declared in `tools.yaml`, not called |
+| `infra/` Terraform modules | STUB | placeholders |
+
+## Known limitations
+
+- kagent / HolmesGPT never run live here. To finish: `docs/AGENTS_SETUP.md` §3.
+- With the current reliabilities every multi-agent AI-path finding is a
+  tiebreak (gap 0.04 × severity < 0.15), and agents that found nothing still
+  compete in arbitration. Changing either is an arbitration decision for the
+  team (CLAUDE.md), not made here.
+- Scan state is per process (a restart forgets the last scan; findings and
+  audit are durable).
+- Windows: refused loopback connections take ~2 s, so the first `/agents/`
+  call after start is slow; later calls use the cached probe.
+
+---
+
+## History (previous sessions, kept for reference)
+
+
 This is the canonical, **honest** implementation tracker. It reflects the actual
 audited state of the repository, not aspirational completion. Statuses are:
 
@@ -64,6 +127,159 @@ LLM self-report — this invariant is preserved and tested.
 ---
 
 ## 3. What this session actually changed (verified)
+
+### Slice 22 — Incidents view + finding detail (this session)
+
+Two larger features, both real derivations from stored data (no fabrication):
+
+- **Incidents.** `GET /findings/incidents` groups findings by affected artifact
+  into incident summaries (count, highest severity, unresolved count, last
+  seen), sorted by severity. New dashboard **Incidents** tab (7th view). This is
+  the honest version of the task-doc "Incidents" feature — a real grouping of
+  related findings, empty when there are none.
+- **Finding detail.** `GET /findings/{id}/detail` joins a finding with its
+  **audit timeline** (via new `audit_for_finding()` on both stores) plus the
+  agent scores and resolution state — so a single finding's full history is
+  traceable.
+
+Store methods added to both SQLite and PostgreSQL backends.
+
+Tests: detail (with timeline) + 404, incidents grouping/sorting
+(`test_observability.py`). **142 passing.** Verified live: 3 findings on one
+artifact → 1 incident (CRITICAL, 2 unresolved); detail returns a 3-entry
+timeline.
+
+Also: the earlier `/agents/` 404 was a stale-paste of `api/main.py` on the
+user's side; confirmed the packaged files register the router and pass.
+
+---
+
+
+### Slice 21 — agents endpoint + findings filtering (this session)
+
+- **`GET /agents/`** — a single backend source of truth for agent metadata
+  (domain, reliability, backing, status). Status is derived honestly: active
+  only if `analyze()` is implemented; kubernetes/observability report "planned".
+  The dashboard Overview panel and the CLI `agents` command now **fetch from
+  this endpoint** instead of hardcoding the list — so all three surfaces stay
+  consistent automatically.
+- **Findings filtering** — `GET /findings/?severity=&path=` (both stores;
+  parameterized SQL). CLI `findings --severity/--path` wired through.
+- Fixed the CLI `agents` test to mock the new endpoint.
+
+Tests: agents endpoint, severity filter, path filter, CLI agents
+(`test_observability.py`, `test_cli.py`). **139 passing.** Verified live:
+`/agents/` → 3 active / 2 planned; `?severity=HIGH` and `?path=fast_path`
+filter correctly.
+
+---
+
+
+### Slice 20 — CLI diagnostics/completion, compose healthcheck, CHANGELOG (this session)
+
+- **CLI `diagnostics`** — checks API reachability, auth posture, and local
+  config; prints actionable guidance; exit code 2 when the API is down.
+  Verified live (both down → exit 2 and healthy → exit 0).
+- **CLI `completion`** — shows how to enable Typer shell completion
+  (bash/zsh/fish/PowerShell).
+- **CLI `stats`** already added last slice; CLI now has 12 commands.
+- **docker-compose api healthcheck** — the api service now declares a
+  `/health` healthcheck (the Dockerfile already had one; compose now matches),
+  completing the `depends_on: service_healthy` chain. YAML validated.
+- **CHANGELOG.md** created (Keep a Changelog format) reflecting all slices.
+
+Tests: diagnostics (healthy + unreachable) + completion (`test_cli.py`, now 17).
+**136 passing.**
+
+---
+
+
+### Slice 19 — Settings view, CLI stats, threat model doc (this session)
+
+- **Settings dashboard view.** New read-only tab showing service/version, API
+  status, auth posture, and LLM provider — all from the live `/health`,
+  `/version`, and `/findings` endpoints. Secrets are never displayed;
+  configuration is env-driven. Dashboard now has **6 views**.
+- **CLI `stats` command.** One-line summary (findings / fast / ai / tiebreaks /
+  pending approvals / audit events) with `--json`. Verified live.
+- **`docs/threat-model.md` created.** `SECURITY.md` and the sanitizer docstring
+  both referenced it but it didn't exist — now a real threat model with trust
+  boundaries, a threat/control table (T1–T9), and residual risk. Fixed the
+  outdated "Phase 3" label in `SECURITY.md` (sanitization is done).
+
+Tests: CLI `stats` + `reject` (`test_cli.py`, now 14). **133 passing.**
+
+---
+
+
+### Slice 18 — dashboard UI fixes + polish (this session)
+
+Fixes from a real screenshot review:
+- **Sidebar agent list corrected.** It hardcoded the pre-implementation state:
+  Security showed as inactive "OPA / Semgrep · Phase 3". Security is a real
+  active agent — now shown active ("Source scan · 0.85"), with 3 active agents
+  (Infra/CI/CD/Security) grouped and the two MCP agents labeled "planned"
+  instead of internal phase numbers. Now consistent with the Overview card.
+- **Header overlap fixed.** Tabs are now the primary nav (first), the descriptor
+  is secondary and `nowrap`, and hides below 1100px so it never collides with
+  the logo/tabs.
+- **Favicon added** (inline SVG) — removes the `GET /favicon.ico 404`.
+- **`GET /version`** endpoint added for API/CLI parity.
+
+Tests: `test_version_endpoint`, `test_dashboard_has_favicon`. **131 passing.**
+
+---
+
+
+### Slices 16–17 — CI hardening + Security view (this session)
+
+**Slice 16 — CI/CD workflow hardening.** All three GitHub Actions workflows
+hardened: least-privilege top-level `permissions: contents: read` (jobs elevate
+only what they need); `ci.yml` now runs the **full** suite (was unit-only) with
+pip caching + concurrency; `security.yml` pins `trivy-action` to a released tag
+(was `@master`) and adds a `pip-audit` job; `release.yml` gets scoped
+permissions, GHCR login, and build-push. YAML validated; CI steps reproduced
+locally green.
+
+**Slice 17 — Security dashboard view + endpoint.** New `GET /findings/severity`
+returning a real severity breakdown (added `severity_breakdown()` to both SQLite
+and Postgres stores; declared before the dynamic `/{id}` route to avoid
+shadowing). New dashboard **Security** tab rendering live severity-distribution
+bars. Tests: store + API (`test_persistence`, `test_observability`). Verified
+live: `{CRITICAL:2, HIGH:1, LOW:1}` aggregation rendered.
+
+**Note on Terraform:** `infra/*.tf` are `# TODO Phase 4` stubs. No Terraform was
+written this session because no `terraform` binary is available here to validate
+it — writing unvalidated HCL would violate the no-fabrication rule. Left honestly
+as pending.
+
+**Total: 129 passing tests.**
+
+---
+
+
+### Slices 13–15 — approval lifecycle, Overview view, docs (this session)
+
+**Slice 13 — approval reject/expire.** `/events/findings/{id}/reject` and
+`/events/approvals/expire` — both durable and audited; rejected/expired findings
+leave the pending queue. Wired into the dashboard (reject button) and CLI
+(`reject`). Tests: `test_approval_lifecycle.py` (6). Verified live.
+
+**Slice 14 — dashboard Overview.** New default landing view with live stats
+(findings totals, pending approvals, audit count) and system/agent status, all
+from real endpoints (`/findings`, `/events/approvals/pending`, `/audit`,
+`/health`). No mock data. HTML structurally validated; data sources smoke-tested.
+
+**Slice 15 — documentation.** Rewrote `README.md` (9 → ~280 lines) with an
+honest feature set, Mermaid architecture diagram, quickstart, config table, CLI
+and API reference, deployment, and structure — planned agents clearly labeled.
+Added `docs/ARCHITECTURE.md` with component + sequence diagrams. Docs reflect
+the implemented system; nothing overclaimed.
+
+**Total: 127 passing tests.**
+
+---
+
 
 ### Slice 12 — dashboard Approvals + Audit views + startup fix (this session)
 
@@ -344,7 +560,7 @@ the kubernetes/observability MCP connectors are wired in.
 | Check | Command | Result |
 |-------|---------|--------|
 | Lint | `ruff check .` | PASS (clean) |
-| Unit + integration tests | `pytest tests/` | 121 passed (1 slow) |
+| Unit + integration tests | `pytest tests/` | 142 passed (1 slow) |
 | API smoke | FastAPI `TestClient` demo → findings → audit | PASS (data persisted + readable) |
 | Orchestrator run | security agent scores 0.85 and enters arbitration | PASS (verified in logs) |
 | No stray artifacts | `ls *.db` | none committed |
@@ -366,7 +582,7 @@ the kubernetes/observability MCP connectors are wired in.
 **P2 (reliability / ops)**
 - ~~PostgreSQL backend behind the same `get_store()` API~~ — **DONE** (slice 9, live-DB-unverified).
 - ~~Harden Dockerfile (non-root, multi-stage), Helm (securityContext, limits), Terraform~~ — Docker + Helm **DONE** (slice 8, build-unverified); Terraform still pending.
-- Structured logging with correlation IDs.
+- ~~Structured logging with correlation IDs~~ — **DONE**.
 
 **P3 (product polish)**
 - Real web dashboard (framework TBD) beyond the single static HTML page.
