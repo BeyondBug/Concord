@@ -95,17 +95,16 @@ def test_health_public_when_enforced(monkeypatch):
     assert client.get("/health").status_code == 200
 
 
-def test_webhook_stays_key_free_when_enforced(monkeypatch):
+def test_webhook_stays_key_free_when_enforced(monkeypatch, post_github):
     """The GitHub webhook uses its own HMAC check, not the API key.
 
-    With no WEBHOOK_SECRET set it runs in dev mode and accepts the payload, so
-    a 401 here would mean the API key wrongly guarded it.
+    A correctly signed request without an API key must get through, so a 401
+    here would mean the API key wrongly guarded it.
     """
-    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
     app = _fresh_app(monkeypatch, "secret-key-123")
     client = TestClient(app)
-    r = client.post("/events/github", json={"repository": {"full_name": "a/b"}})
-    assert r.status_code != 401
+    r = post_github(client, {"repository": {"full_name": "a/b"}})
+    assert r.status_code == 202
 
 
 def test_correlation_id_header_present(monkeypatch):

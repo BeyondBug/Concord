@@ -34,7 +34,7 @@ Everything entering from the left is **untrusted data**, never instructions.
 | T6 | Tampered or missing audit trail | Every decision (incl. fast-path) writes a durable, correlation-tagged audit record | `core/persistence/`, `core/observability/` |
 | T7 | Confidence manipulation by the model | Confidence is deterministic (`severity_weight × source_reliability`), never LLM self-report | `core/arbitration/` |
 | T8 | Supply-chain risk in CI | Pinned actions, least-privilege `permissions`, dependency audit | `.github/workflows/` |
-| T9 | Webhook forgery | GitHub webhook verifies an HMAC signature (`WEBHOOK_SECRET`) | `api/routes/events.py` |
+| T9 | Webhook forgery | GitHub webhook verifies an HMAC signature (`WEBHOOK_SECRET`); unsigned requests get 401 and the app refuses to start without the secret | `api/routes/events.py` |
 
 ## Residual risk
 
