@@ -11,6 +11,10 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     target-branch: develop
+    ignore:
+      # v2.6.0 image 404s (ossf/scorecard-action#1752); see scorecard.yml.
+      - dependency-name: ossf/scorecard-action
+        versions: ["2.6.0"]
     schedule:
       interval: weekly
     groups:
