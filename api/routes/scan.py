@@ -34,7 +34,8 @@ from core.persistence.store import _is_pending
 router = APIRouter(prefix="/events", tags=["scan"])
 logger = logging.getLogger("concord.scan")
 
-_ID = PathParam(min_length=1, max_length=200)
+# IDs and agent names are logged and audited: allow only safe characters.
+_ID = PathParam(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._:-]+$")
 _SEV_RANK = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1}
 
 
@@ -124,7 +125,7 @@ def _resolution(result: dict[str, Any]) -> str:
 
 
 @router.post("/findings/{finding_id}/approve/{agent}")
-async def approve_finding(finding_id: str = _ID, agent: str = PathParam(max_length=40)):
+async def approve_finding(finding_id: str = _ID, agent: str = PathParam(max_length=40, pattern=r"^[a-z_]+$")):
     """Resolve a human tiebreak by choosing the winning agent.
 
     Creates a GitHub issue on the scanned repository when GITHUB_TOKEN is set.

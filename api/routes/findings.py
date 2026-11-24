@@ -47,7 +47,7 @@ class _StoreAdapter:
 
 store = _StoreAdapter()
 
-_ID = Path(min_length=1, max_length=200)
+_ID = Path(min_length=1, max_length=200, pattern=r"^[A-Za-z0-9._:-]+$")
 
 
 class FindingOut(BaseModel):

@@ -47,12 +47,17 @@ def _build_verify(tls: ConnectorTLS | None):
     """Return the value for httpx's ``verify`` argument.
 
     True (default) verifies against the system trust store. A CA bundle path
-    verifies against that bundle. verify=False is only honored when the
-    manifest explicitly sets it (self-signed dev endpoints).
+    verifies against that bundle. verify=False needs both the manifest setting
+    and CONCORD_ALLOW_INSECURE_TRANSPORT=1 (self-signed dev endpoints only).
     """
     if tls is None:
         return True
     if tls.verify is False:
+        if not _insecure_allowed():
+            raise InsecureTransportError(
+                f"A connector sets tls.verify=false. Set {_INSECURE_ENV}=1 to "
+                "allow unverified TLS (dev only)."
+            )
         logger.warning("TLS verification DISABLED for a connector via manifest "
                        "(tls.verify=false). Do not use in production.")
         return False
