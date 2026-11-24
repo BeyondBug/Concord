@@ -45,4 +45,5 @@ from `rulemap.yaml`), `hygiene` (a best-practice check such as access logging,
 mapped to the class `hygiene`; neither rewarded nor punished) or `out_of_scope`. Precision is `tp / (tp + fp)` and
 recall is `tp / (tp + missed labels)`. Unreviewed and unmapped results are
 reported, never silently counted as right or wrong; `--fail-on-unreviewed`
-turns them into a CI failure.
+turns either one into a CI failure. `fetch` refuses a checkout with local
+changes or extra files, since scanners would otherwise read different content.

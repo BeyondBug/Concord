@@ -117,10 +117,15 @@ def read_sarif(path: Path, repo_root: str | None = None) -> list[Result]:
     out = []
     for run in log.get("runs", []):
         tool = run.get("tool", {}).get("driver", {}).get("name", "unknown").lower()
+        artifacts = run.get("artifacts", [])
         for res in run.get("results", []):
             for loc in res.get("locations", [])[:1]:
                 phys = loc.get("physicalLocation", {})
-                uri = phys.get("artifactLocation", {}).get("uri")
+                art = phys.get("artifactLocation", {})
+                uri = art.get("uri")
+                if uri is None and isinstance(art.get("index"), int) and 0 <= art["index"] < len(artifacts):
+                    # SARIF lets a location point into run.artifacts instead of repeating the URI.
+                    uri = artifacts[art["index"]].get("location", {}).get("uri")
                 if not uri:
                     continue
                 line = phys.get("region", {}).get("startLine", 1)
@@ -131,6 +136,18 @@ def read_sarif(path: Path, repo_root: str | None = None) -> list[Result]:
 def _hits(label: dict, r: Result, cls: str) -> bool:
     return (label["file"] == r.file and label["class"] == cls
             and label["start_line"] - LINE_SLACK <= r.line <= label["end_line"] + LINE_SLACK)
+
+
+def _distance(label: dict, line: int) -> int:
+    """0 inside the label's range, else how many lines outside it."""
+    return max(label["start_line"] - line, 0, line - label["end_line"])
+
+
+def _best(findings: list[dict], r: Result, cls: str, matched: set[str]) -> dict | None:
+    """The eligible label for r: unmatched ones first, then the closest range."""
+    eligible = [f for f in findings if _hits(f, r, cls)]
+    return min(eligible, key=lambda f: (f["id"] in matched, _distance(f, r.line), f["start_line"]),
+               default=None)
 
 
 def score(repo: dict, expected: dict, results: list[Result], rulemap: dict) -> Score:
@@ -157,7 +174,7 @@ def score(repo: dict, expected: dict, results: list[Result], rulemap: dict) -> S
         if cls is None:
             put("unmapped", r)
             continue
-        label = next((f for f in expected["findings"] if _hits(f, r, cls)), None)
+        label = _best(expected["findings"], r, cls, matched)
         if label is not None:
             put("duplicate" if label["id"] in matched else "tp", r, cls)
             matched.add(label["id"])
@@ -183,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--root", help="absolute path prefix to strip from result URIs")
     ap.add_argument("--json", action="store_true", help="print the summary as JSON")
     ap.add_argument("--fail-on-unreviewed", action="store_true",
-                    help="exit 1 when any in-scope result has not been judged yet")
+                    help="exit 1 when any in-scope result is unreviewed or its rule is unmapped")
     a = ap.parse_args(argv)
 
     repo = load_repo(a.repo)
@@ -200,7 +217,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{s.repo} ({s.kind}): precision {_fmt(s.precision)}  recall {_fmt(s.recall)}  "
               f"tp {s.tp}  fp {s.fp}  fn {s.fn}")
         print("buckets: " + ", ".join(f"{k} {v}" for k, v in summary["counts"].items()))
-    return 1 if a.fail_on_unreviewed and summary["counts"].get("unreviewed") else 0
+    counts = summary["counts"]
+    return 1 if a.fail_on_unreviewed and (counts.get("unreviewed") or counts.get("unmapped")) else 0
 
 
 if __name__ == "__main__":

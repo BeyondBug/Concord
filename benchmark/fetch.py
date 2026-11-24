@@ -32,6 +32,12 @@ def fetch(repo: dict, dest: Path) -> Path:
     head = git("rev-parse", "HEAD", cwd=target)
     if head != repo["commit"]:
         raise SystemExit(f"{repo['name']}: HEAD is {head}, expected {repo['commit']}")
+    # Checkout keeps local edits, so the pinned commit alone does not prove the
+    # files are pristine: any change or extra file would skew every score.
+    dirty = git("status", "--porcelain", "--untracked-files=all", "--ignored", cwd=target)
+    if dirty:
+        raise SystemExit(f"{repo['name']}: {target} has local changes or extra files; "
+                         f"delete it and run fetch again.\n{dirty[:500]}")
     return target
 
 

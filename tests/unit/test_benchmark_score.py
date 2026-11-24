@@ -137,3 +137,65 @@ def test_clean_fixture_scores_clean_with_real_tool_output():
               {"repo": "clean-terraform", "scope": [], "findings": [], "rejected": []},
               results, load_rulemap())
     assert s.fp == 0 and s.summary()["counts"] == {"hygiene": 7}
+
+
+def test_read_sarif_resolves_indexed_artifact_locations(tmp_path):
+    log = {"version": "2.1.0", "runs": [{
+        "tool": {"driver": {"name": "Checkov"}},
+        "artifacts": [{"location": {"uri": "infra/s3.tf"}}],
+        "results": [{"ruleId": "CKV_1", "locations": [{"physicalLocation": {
+            "artifactLocation": {"index": 0}, "region": {"startLine": 12}}}]}]}]}
+    p = tmp_path / "indexed.sarif"
+    p.write_text(json.dumps(log))
+    assert read_sarif(p) == [Result("checkov", "CKV_1", "infra/s3.tf", 12)]
+
+
+def test_adjacent_labels_each_get_their_own_hit():
+    labels = {"repo": "demo", "scope": [], "rejected": [], "findings": [
+        {"id": "DEMO-001", "class": "s3-public-acl", "file": "a.tf", "start_line": 10,
+         "end_line": 14, "severity": "HIGH", "why": "first public bucket"},
+        {"id": "DEMO-002", "class": "s3-public-acl", "file": "a.tf", "start_line": 15,
+         "end_line": 19, "severity": "HIGH", "why": "second public bucket"}]}
+    s = score(VULN, labels, [r("CKV_1", "a.tf", 10), r("CKV_1", "a.tf", 15)], RULEMAP)
+    assert s.tp == 2 and s.fn == 0
+    # A lone hit inside B's range goes to B, not to A through A's slack.
+    s = score(VULN, labels, [r("CKV_1", "a.tf", 15)], RULEMAP)
+    assert s.summary()["missed"] == ["DEMO-001"]
+
+
+def test_strict_mode_fails_on_unmapped_rules(tmp_path):
+    from benchmark.score import main
+    log = {"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "NewTool"}}, "results": [
+        {"ruleId": "R1", "locations": [{"physicalLocation": {
+            "artifactLocation": {"uri": "x.tf"}, "region": {"startLine": 1}}}]}]}]}
+    p = tmp_path / "new.sarif"
+    p.write_text(json.dumps(log))
+    assert main(["--repo", "terragoat", str(p)]) == 0
+    assert main(["--repo", "terragoat", str(p), "--fail-on-unreviewed"]) == 1
+
+
+def test_fetch_rejects_a_modified_checkout(tmp_path):
+    import subprocess
+
+    from benchmark.fetch import fetch
+
+    def git(*a, cwd):
+        return subprocess.run(["git", *a], cwd=cwd, check=True, capture_output=True,
+                              text=True).stdout.strip()
+    src = tmp_path / "src"
+    src.mkdir()
+    git("init", "-q", cwd=src)
+    (src / "main.tf").write_text("x\n")
+    git("add", ".", cwd=src)
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "init", cwd=src)
+    repo = {"name": "local", "url": str(src), "commit": git("rev-parse", "HEAD", cwd=src)}
+    dest = tmp_path / "bench"
+    checkout = fetch(repo, dest)
+    assert fetch(repo, dest) == checkout          # a clean checkout is reusable
+    (checkout / "main.tf").write_text("changed\n")
+    with pytest.raises(SystemExit, match="local changes"):
+        fetch(repo, dest)
+    git("checkout", "--", "main.tf", cwd=checkout)
+    (checkout / "extra.tf").write_text("y\n")
+    with pytest.raises(SystemExit, match="extra files"):
+        fetch(repo, dest)
