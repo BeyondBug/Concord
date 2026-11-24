@@ -17,6 +17,8 @@ logger = logging.getLogger("concord.api")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail fast: an unset secret would leave the public webhook unauthenticated.
+    events.require_webhook_secret()
     # Build the persistence backend once, at startup, so any Postgres
     # connection timeout happens here (before serving traffic) rather than
     # inside the first request that writes a finding.

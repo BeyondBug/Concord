@@ -175,16 +175,13 @@ def test_findings_limit_validated(client):
     assert client.get("/findings/", params={"path": "nope"}).status_code == 422
 
 
-def test_webhook_bad_json_is_400(client, monkeypatch):
-    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
-    r = client.post("/events/github", content=b"{not json",
-                    headers={"Content-Type": "application/json"})
+def test_webhook_bad_json_is_400(client, post_github):
+    r = post_github(client, b"{not json")
     assert r.status_code == 400
 
 
-def test_webhook_without_commit_is_ignored_not_invented(client, monkeypatch):
-    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
-    r = client.post("/events/github", json={"repository": {"full_name": "a/b"}})
+def test_webhook_without_commit_is_ignored_not_invented(client, post_github):
+    r = post_github(client, {"repository": {"full_name": "a/b"}})
     assert r.status_code == 202 and r.json()["status"] == "ignored"
     assert get_store().list_findings() == []
 
