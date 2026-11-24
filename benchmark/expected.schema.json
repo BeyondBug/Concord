@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Concord benchmark labels (benchmark/labels/<repo>.json)",
+  "type": "object",
+  "required": ["repo", "scope", "findings", "rejected"],
+  "additionalProperties": false,
+  "properties": {
+    "repo": {"type": "string", "description": "Name from benchmark/repos.yaml."},
+    "scope": {
+      "type": "array",
+      "description": "Path prefixes that have been reviewed exhaustively. Results outside them are ignored.",
+      "items": {"type": "string"}
+    },
+    "findings": {
+      "type": "array",
+      "description": "True findings: real problems a scanner should report.",
+      "items": {"$ref": "#/$defs/finding"}
+    },
+    "rejected": {
+      "type": "array",
+      "description": "Scanner alerts a human reviewed and judged not to be real problems.",
+      "items": {"$ref": "#/$defs/rejected"}
+    }
+  },
+  "$defs": {
+    "location": {
+      "type": "object",
+      "required": ["file", "start_line", "end_line", "class"],
+      "properties": {
+        "file": {"type": "string", "pattern": "^[^/].*"},
+        "start_line": {"type": "integer", "minimum": 1},
+        "end_line": {"type": "integer", "minimum": 1},
+        "class": {"type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"}
+      }
+    },
+    "finding": {
+      "allOf": [{"$ref": "#/$defs/location"}],
+      "required": ["id", "severity", "why"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Z]+-[0-9]{3,}$"},
+        "file": true, "start_line": true, "end_line": true, "class": true,
+        "severity": {"enum": ["CRITICAL", "HIGH", "MEDIUM", "LOW"]},
+        "cwe": {"type": "string", "pattern": "^CWE-[0-9]+$"},
+        "why": {"type": "string", "minLength": 10, "description": "What is wrong, in the reviewer's words."}
+      },
+      "additionalProperties": false
+    },
+    "rejected": {
+      "allOf": [{"$ref": "#/$defs/location"}],
+      "required": ["reason"],
+      "properties": {
+        "file": true, "start_line": true, "end_line": true, "class": true,
+        "reason": {"type": "string", "minLength": 10}
+      },
+      "additionalProperties": false
+    }
+  }
+}
