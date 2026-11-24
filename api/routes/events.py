@@ -21,10 +21,24 @@ logger = logging.getLogger("concord.events")
 Severity = Literal["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFORMATIONAL"]
 
 
+# Values copied from old .env.example files; treated the same as no secret.
+_PLACEHOLDER_SECRETS = {"changeme"}
+
+
+def require_webhook_secret() -> None:
+    """Refuse to start without a real WEBHOOK_SECRET (called at app startup)."""
+    secret = os.getenv("WEBHOOK_SECRET", "").strip()
+    if not secret or secret in _PLACEHOLDER_SECRETS:
+        raise RuntimeError(
+            "WEBHOOK_SECRET is not set (or is a placeholder). Concord will not "
+            "start without it. Generate one with: openssl rand -hex 32"
+        )
+
+
 def _verify_signature(body: bytes, sig_header: str) -> bool:
-    secret = os.getenv("WEBHOOK_SECRET", "")
-    if not secret:
-        return True  # dev mode: skip check if no secret configured
+    secret = os.getenv("WEBHOOK_SECRET", "").strip()
+    if not secret or secret in _PLACEHOLDER_SECRETS:
+        return False  # fail closed: never accept an unsigned webhook
     mac = hmac.new(secret.encode(), body, hashlib.sha256)
     return hmac.compare_digest("sha256=" + mac.hexdigest(), sig_header or "")
 

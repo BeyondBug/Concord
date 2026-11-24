@@ -135,7 +135,7 @@ flowchart TD
 ```bash
 python -m venv .venv && . .venv/bin/activate      # Windows: .venv\Scripts\Activate.ps1
 pip install -r requirements/dev.txt
-cp .env.example .env                               # then edit as needed
+cp .env.example .env                               # then set WEBHOOK_SECRET (required)
 
 uvicorn api.main:app --reload --port 8000 --env-file .env   # the app itself does not read .env
 # open http://localhost:8000  (dashboard)
@@ -152,7 +152,7 @@ python concord_cli/main.py audit
 ### Docker
 
 ```bash
-# Set POSTGRES_PASSWORD in .env first (required; no weak default).
+# Set POSTGRES_PASSWORD and WEBHOOK_SECRET in .env first (both required).
 docker compose up --build
 ```
 
@@ -173,7 +173,7 @@ All configuration is via environment variables (see `.env.example`). Highlights:
 | `REDIS_URL` | Enables Redis-backed dedup; falls back to in-memory. |
 | `CONCORD_LOG_FORMAT` | `json` for structured logs, else human text. |
 | `CONCORD_ALLOW_INSECURE_TRANSPORT` | Allow plaintext MCP URLs (dev only). |
-| `WEBHOOK_SECRET` | HMAC secret for the GitHub webhook. |
+| `WEBHOOK_SECRET` | HMAC secret for the GitHub webhook. **Required**: Concord refuses to start without it, and unsigned webhooks get 401. |
 
 > If `POSTGRES_URL` is set but no database is running, the app falls back to
 > SQLite **at startup** (one short timeout at boot). Comment it out to skip

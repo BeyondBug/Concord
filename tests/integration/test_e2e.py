@@ -14,20 +14,19 @@ from fastapi.testclient import TestClient
 @pytest.fixture
 def client(monkeypatch):
     monkeypatch.delenv("CONCORD_API_KEY", raising=False)
-    monkeypatch.delenv("WEBHOOK_SECRET", raising=False)
     from api.main import app
     with TestClient(app) as c:
         yield c
 
 
-def test_friday_demo_flow(client):
+def test_friday_demo_flow(client, post_github):
     # 1. A push webhook arrives for a commit touching Terraform.
     push = {
         "repository": {"full_name": "BeyondBug/CRMS"},
         "head_commit": {"id": "0123456789abcdef0123", "message": "open up IAM",
                         "modified": ["tests/fixtures/terraform"]},
     }
-    r = client.post("/events/github", json=push, headers={"X-Request-ID": "e2e-1"})
+    r = post_github(client, push, {"X-Request-ID": "e2e-1"})
     assert r.status_code == 202
     fid = r.json()["finding_id"]
     assert fid == "GH-0123456789ab"
@@ -62,6 +61,6 @@ def test_friday_demo_flow(client):
     assert client.get("/events/approvals/pending").json()["total"] == 0
 
     # 5. The same push again is deduplicated: audited, no second finding.
-    client.post("/events/github", json=push)
+    post_github(client, push)
     assert client.get("/findings/").json()["stats"]["total"] == 1
     assert len(client.get(f"/findings/{fid}/detail").json()["timeline"]) == 3
