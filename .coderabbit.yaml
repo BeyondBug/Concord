@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+
+reviews:
+  # A security tool: prefer more findings over fewer.
+  profile: assertive
+  poem: false
+  in_progress_fortune: false
+  auto_review:
+    enabled: true
+    drafts: false
+    # Feature PRs target develop, releases target main (the default branch).
+    base_branches:
+      - develop
+  path_filters:
+    - "!assets/**"
+    - "!docs/**/*.png"
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        Concord triages security findings. Flag any change that:
+        - accepts a webhook without verifying its HMAC signature, or lets the app run without WEBHOOK_SECRET;
+        - computes a confidence or score from an LLM's own claim instead of evidence, or lets an agent with zero violations win arbitration;
+        - performs an approval or any state change without an atomic check (races where two requests both succeed);
+        - skips an audit record for a decision, or logs secrets or tokens;
+        - adds a hardcoded credential, a default password, or a placeholder secret such as "changeme".
+    - path: "tests/**"
+      instructions: |
+        Webhook tests must send signed requests (the post_github fixture in tests/conftest.py).
+        Contract tests under Stage 0 must talk to the API over HTTP only, so they can run against the Go server later.
+    - path: "**/*.go"
+      instructions: |
+        Go rewrite: check error handling on every call, context propagation, SQL only through sqlc-generated queries, and no shelling out to scanners outside the sandboxed runner.
