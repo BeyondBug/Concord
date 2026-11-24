@@ -24,11 +24,12 @@ jobs:
           results_file: results.sarif
           results_format: sarif
           publish_results: true
+      # Code scanning first, so a failed artifact upload cannot block it.
+      - uses: github/codeql-action/upload-sarif@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
+        with:
+          sarif_file: results.sarif
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: scorecard-sarif
           path: results.sarif
           retention-days: 5
-      - uses: github/codeql-action/upload-sarif@915412ff23e8b7659517e607487dbeae018f2934 # v4.39.5
-        with:
-          sarif_file: results.sarif
