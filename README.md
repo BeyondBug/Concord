@@ -9,6 +9,15 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/BeyondBug/Concord/actions/workflows/ci.yml"><img src="https://github.com/BeyondBug/Concord/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <a href="https://github.com/BeyondBug/Concord/actions/workflows/codeql.yml"><img src="https://github.com/BeyondBug/Concord/actions/workflows/codeql.yml/badge.svg?branch=main" alt="CodeQL"></a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/BeyondBug/Concord"><img src="https://api.scorecard.dev/projects/github.com/BeyondBug/Concord/badge" alt="OpenSSF Scorecard"></a>
+  <a href="https://codecov.io/gh/BeyondBug/Concord"><img src="https://codecov.io/gh/BeyondBug/Concord/branch/main/graph/badge.svg" alt="Coverage"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/BeyondBug/Concord" alt="License: Apache-2.0"></a>
+  <a href="https://coderabbit.ai"><img src="https://img.shields.io/coderabbit/prs/github/BeyondBug/Concord?label=CodeRabbit%20reviews&labelColor=171717&color=FF570A" alt="CodeRabbit reviews"></a>
+</p>
+
+<p align="center">
   A self-hosted platform that triages security findings, runs domain agents,
   arbitrates their results with a deterministic confidence model, and keeps a
   human in the loop for consequential actions — with a full audit trail.
